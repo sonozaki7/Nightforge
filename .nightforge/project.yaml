@@ -1,0 +1,41 @@
+id: my-saas
+name: My SaaS Product
+path: /srv/apps/my-saas/repository
+
+deployment:
+  policy: direct-prod
+  testCommand: npm test
+  lintCommand: npm run lint
+  typecheckCommand: npx tsc --noEmit
+  buildCommand: npm run build
+  deployCommand: ./ops/deploy.sh
+  healthcheckCommand: ./ops/healthcheck.sh
+  rollbackCommand: ./ops/rollback.sh
+
+concurrency:
+  maxWriteTasks: 1
+  maxReadonlyTasks: 3
+
+agent:
+  defaultModel: qwen3.8
+  maxAttempts: 3
+  maxRuntimeMinutes: 90
+  maxTicketCostUsd: 8
+
+permissions:
+  allowedServices:
+    - github
+    - sentry
+    - cloudflare
+  prohibitedActions:
+    - delete-production-database
+    - rotate-production-secrets
+    - disable-authentication
+    - modify-billing-without-approval
+
+risk:
+  approvalRequiredFor:
+    - billing
+    - authentication
+    - destructive-migration
+    - account-deletion

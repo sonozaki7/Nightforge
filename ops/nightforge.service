@@ -1,0 +1,36 @@
+[Unit]
+Description=Nightforge Orchestrator
+Documentation=https://github.com/sonozaki7/Nightforge
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=nightforge
+Group=nightforge
+WorkingDirectory=/opt/nightforge
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/nightforge/.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/nightforge /srv/worktrees /tmp
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nightforge
+
+[Install]
+WantedBy=multi-user.target

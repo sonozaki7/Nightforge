@@ -1,0 +1,61 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  crawl4ai:
+    image: unclecode/crawl4ai
+    ports:
+      - "11235:11235"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  searxng:
+    image: searxng/searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - searxng-config:/etc/searxng
+    environment:
+      - SEARXNG_SETTINGS_FORMATS=json,html
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  nightforge:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+      crawl4ai:
+        condition: service_healthy
+      searxng:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - CRAWL4AI_URL=http://crawl4ai:11235
+      - SEARXNG_URL=http://searxng:8080
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "3000:3000"
+
+volumes:
+  redis-data:
+  searxng-config:
