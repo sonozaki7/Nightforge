@@ -53,9 +53,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Pricing button click → Stripe checkout (placeholder URLs)
   // Replace these with real Stripe Payment Link URLs after setup
   const STRIPE_LINKS = {
-    solo: "#stripe-solo",
-    squad: "#stripe-squad",
-    empire: "#stripe-empire",
+    solo: "https://buy.stripe.com/test_eVq3cxb2iabb0tQ3aw6Ri00",
+    squad: "https://buy.stripe.com/test_28E9AVgmC6YZdgCaCY6Ri01",
+    empire: "https://buy.stripe.com/test_dRm00l5HYfvv6SebH26Ri02",
   };
 
   document.querySelectorAll("[data-tier]").forEach((btn) => {
