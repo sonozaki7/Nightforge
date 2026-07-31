@@ -4,212 +4,312 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nightforge — Autonomous AI Agent Orchestrator</title>
-  <meta name="description" content="Ship code while you sleep. Nightforge orchestrates AI agents to implement, test, deploy, and verify — autonomously. Open source or managed.">
+  <meta name="description" content="Ship code while you sleep. Nightforge orchestrates AI agents to implement, test, deploy, and verify — autonomously. Free open source or fully managed.">
   <meta property="og:title" content="Nightforge — Ship Code While You Sleep">
-  <meta property="og:description" content="Autonomous AI agent orchestrator. Open source or managed SaaS.">
+  <meta property="og:description" content="Autonomous AI agent orchestrator. Self-host free or let us run it for you.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://getnightforge.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Scanline overlay -->
+  <canvas id="particles" aria-hidden="true"></canvas>
   <div class="scanlines" aria-hidden="true"></div>
 
-  <!-- Grid background -->
-  <div class="grid-bg" aria-hidden="true"></div>
-
   <nav class="nav">
-    <div class="nav-brand">
-      <span class="brand-text">NIGHT<span class="glow">FORGE</span></span>
-    </div>
+    <a href="/" class="nav-brand">
+      <span class="brand-mark">NF</span>
+      <span class="brand-word">NIGHTFORGE</span>
+    </a>
     <div class="nav-links">
-      <a href="#features">Features</a>
+      <a href="#how">How It Works</a>
+      <a href="#compare">Self-Host vs Managed</a>
       <a href="#pricing">Pricing</a>
-      <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener" class="nav-gh">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        Star
+      </a>
       <a href="#pricing" class="btn-nav">Get Started</a>
     </div>
   </nav>
 
+  <!-- HERO: Terminal-first, not centered trio -->
   <section class="hero">
-    <div class="hero-content">
-      <div class="hero-badge">OPEN SOURCE + MANAGED</div>
-      <h1>Ship code<br><span class="gradient-text">while you sleep.</span></h1>
-      <p class="hero-sub">Nightforge orchestrates AI agents that implement tickets, run tests, deploy, and verify — fully autonomous. No PRs. No review gates. Just shipped code.</p>
-      <div class="hero-cta">
-        <a href="#pricing" class="btn btn-primary">Start Building</a>
-        <a href="https://github.com/sonozaki7/Nightforge" class="btn btn-ghost" target="_blank" rel="noopener">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-          Star on GitHub
-        </a>
+    <div class="hero-left">
+      <div class="hero-eyebrow">OPEN SOURCE · MIT LICENSED</div>
+      <h1 class="hero-title">Your code ships<br>itself now.</h1>
+      <p class="hero-desc">Nightforge is an autonomous agent orchestrator that watches your issue tracker, implements tickets, runs tests, deploys, and verifies — with zero human bottlenecks. Run it yourself for free, or let us handle everything.</p>
+      <div class="hero-actions">
+        <a href="#pricing" class="btn btn-primary">See Plans</a>
+        <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener" class="btn btn-outline">Clone & Self-Host</a>
       </div>
-      <div class="hero-stats">
-        <div class="stat"><span class="stat-num">6-8</span><span class="stat-label">concurrent agents</span></div>
-        <div class="stat"><span class="stat-num">&lt;30s</span><span class="stat-label">rollback time</span></div>
-        <div class="stat"><span class="stat-num">93%</span><span class="stat-label">cache hit rate</span></div>
-      </div>
-    </div>
-    <div class="hero-terminal">
-      <div class="terminal-header">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
-        <span class="terminal-title">nightforge — autonomous pipeline</span>
-      </div>
-      <div class="terminal-body">
-        <div class="line"><span class="prompt">$</span> nightforge start --mode autonomous</div>
-        <div class="line dim">[queue] 3 tickets claimed from Linear</div>
-        <div class="line dim">[router] ticket-42 → qwen-max (effort: high)</div>
-        <div class="line dim">[worker] implementing: "Add dark mode toggle"</div>
-        <div class="line dim">[worker] tests pass ✓ lint pass ✓ typecheck ✓</div>
-        <div class="line success">[pipeline] merged → deployed → health check ✓</div>
-        <div class="line success">[shipped] ticket-42 done in 4m 12s — $0.03</div>
-        <div class="line dim">[worker] implementing: "Fix pagination bug"</div>
-        <div class="line warn">[pipeline] health check failed → auto-revert</div>
-        <div class="line success">[revert] rolled back in 2s — retrying with fix</div>
-        <div class="line cursor">_</div>
+      <div class="hero-proof">
+        <div class="proof-item"><strong>$0.012</strong><span>per million tokens</span></div>
+        <div class="proof-divider"></div>
+        <div class="proof-item"><strong>6–8</strong><span>parallel agents</span></div>
+        <div class="proof-divider"></div>
+        <div class="proof-item"><strong>&lt;2s</strong><span>rollback time</span></div>
       </div>
     </div>
-  </section>
-
-  <section id="features" class="features">
-    <h2 class="section-title">Built for <span class="gradient-text">speed</span></h2>
-    <p class="section-sub">No PRs. No review gates. No approval pipelines. Just autonomous execution with instant rollback.</p>
-    <div class="feature-grid">
-      <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>Auto-Merge Pipeline</h3>
-        <p>Commit → merge → deploy → verify. If health check fails, instant revert. No human bottleneck.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🧠</div>
-        <h3>Multi-Model Router</h3>
-        <p>Qwen, Claude, DeepSeek, Hermes — routed by task complexity. Escalation on failure. Cost-optimized.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔒</div>
-        <h3>Blast Radius Control</h3>
-        <p>Per-action autonomy tiers. Git ops = fully auto. Stripe charges = Telegram approval. DB drops = forbidden.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📊</div>
-        <h3>Cost Ledger</h3>
-        <p>Per-ticket cost tracking across all providers. Token plan support. Daily budgets with auto-pause.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔄</div>
-        <h3>Instant Rollback</h3>
-        <p>Atomic symlink swaps. Failed deploy = 2-second revert. Failed merge = git revert. Zero downtime.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon"></div>
-        <h3>6-8 Concurrent Agents</h3>
-        <p>Parallel ticket execution with per-project locks. Sub-agents get isolated git branches. No conflicts.</p>
+    <div class="hero-right">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="t-dot r"></span><span class="t-dot y"></span><span class="t-dot g"></span>
+          <span class="t-title">nightforge — live pipeline</span>
+        </div>
+        <div class="terminal-body">
+          <p><span class="t-green">$</span> nightforge start --autonomous</p>
+          <p class="t-dim">[queue] 4 tickets claimed from Linear</p>
+          <p class="t-dim">[router] #42 → qwen-max · effort:high · $0.03 budget</p>
+          <p class="t-dim">[agent] implementing "Add dark mode toggle"</p>
+          <p class="t-dim">[agent] tests ✓ lint ✓ typecheck ✓ build ✓</p>
+          <p class="t-green">[ship] merged → deployed → health ✓ · 4m12s</p>
+          <p class="t-dim">[router] #43 → claude-sonnet · effort:max</p>
+          <p class="t-dim">[agent] implementing "Fix pagination off-by-one"</p>
+          <p class="t-yellow">[ship] health failed → auto-revert in 1.8s</p>
+          <p class="t-dim">[agent] retrying with fix from error context...</p>
+          <p class="t-green">[ship] merged → deployed → health ✓ · 6m44s</p>
+          <p class="t-dim">[ledger] today: 4 tickets · $0.41 total · 0 escalations</p>
+          <p class="t-cursor">█</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section id="pricing" class="pricing">
-    <h2 class="section-title">Choose your <span class="gradient-text">power level</span></h2>
-    <p class="section-sub">Open source is free forever. Managed plans include hosting, monitoring, and support.</p>
+  <!-- HOW IT WORKS -->
+  <section id="how" class="section">
+    <div class="section-header">
+      <span class="section-tag">PIPELINE</span>
+      <h2>From ticket to production<br>in one autonomous loop</h2>
+    </div>
+    <div class="pipeline-flow">
+      <div class="pipe-step" data-step="1">
+        <div class="pipe-icon">📋</div>
+        <h3>Claim</h3>
+        <p>Webhook fires from Linear/GitHub. Nightforge picks the ticket, classifies blast radius, assigns effort level.</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" data-step="2">
+        <div class="pipe-icon">🧠</div>
+        <h3>Implement</h3>
+        <p>Model router picks the cheapest capable model. Agent gets isolated git worktree. Writes code, runs tests in loop.</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" data-step="3">
+        <div class="pipe-icon">🚀</div>
+        <h3>Ship</h3>
+        <p>Auto-merge to main. Atomic deploy via symlink swap. Health check runs. Pass = done. Fail = instant revert + retry.</p>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" data-step="4">
+        <div class="pipe-icon">📊</div>
+        <h3>Report</h3>
+        <p>Cost logged per ticket. Speed metrics updated. Telegram notification sent. Next ticket claimed automatically.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPARISON: Self-host vs Managed -->
+  <section id="compare" class="section section-dark">
+    <div class="section-header">
+      <span class="section-tag">THE REAL MATH</span>
+      <h2>Self-host is genuinely cheap.<br>Managed is genuinely easier.</h2>
+      <p class="section-sub">We're not going to pretend self-hosting is painful — it's not. Here's the honest breakdown so you can pick what fits.</p>
+    </div>
+
+    <div class="compare-grid">
+      <!-- Self-host card -->
+      <div class="compare-card self-host">
+        <div class="compare-badge">FREE SOFTWARE</div>
+        <h3>Self-Host</h3>
+        <div class="compare-price">$0<span>/mo for Nightforge</span></div>
+        <p class="compare-note">+ ~$68/mo Alibaba token plan + $5-20/mo VPS</p>
+        <ul class="compare-list">
+          <li class="yes">Full source code, MIT license</li>
+          <li class="yes">Unlimited tickets, projects, agents</li>
+          <li class="yes">Alibaba Pro plan: 5.8B tokens/mo = $0.012/M</li>
+          <li class="yes">Total cost: ~$75-90/mo for serious usage</li>
+          <li class="yes">Complete data ownership</li>
+          <li class="no">You manage: server, Redis, SSL, updates</li>
+          <li class="no">You debug: when the pipeline breaks at 3am</li>
+          <li class="no">You configure: model routing, blast radius, tools</li>
+          <li class="no">You monitor: health checks, cost tracking, alerts</li>
+        </ul>
+        <div class="compare-verdict">
+          <strong>Best for:</strong> Developers who enjoy infra, want full control, or run high-volume workloads where per-ticket cost matters more than time.
+        </div>
+        <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener" class="btn btn-outline btn-full">Clone on GitHub</a>
+      </div>
+
+      <!-- Managed card -->
+      <div class="compare-card managed">
+        <div class="compare-badge highlight">ZERO OPS</div>
+        <h3>Managed by Us</h3>
+        <div class="compare-price">$49–499<span>/mo all-in</span></div>
+        <p class="compare-note">Includes infra, monitoring, model credits, support</p>
+        <ul class="compare-list">
+          <li class="yes">Everything in self-host, pre-configured</li>
+          <li class="yes">We run the server, Redis, SSL, updates</li>
+          <li class="yes">We debug when things break (that's our job)</li>
+          <li class="yes">Model routing optimized by us continuously</li>
+          <li class="yes">Dashboard + Telegram bot ready on day 1</li>
+          <li class="yes">Cost tracking + daily budget enforcement</li>
+          <li class="yes">Priority support (we answer within hours)</li>
+          <li class="yes">Blast radius rules pre-tuned for safety</li>
+          <li class="yes">99.9% uptime on Empire tier</li>
+        </ul>
+        <div class="compare-verdict">
+          <strong>Best for:</strong> Founders and teams who want autonomous agents running tonight, not next weekend after configuring nginx.
+        </div>
+        <a href="#pricing" class="btn btn-primary btn-full">See Managed Plans</a>
+      </div>
+    </div>
+
+    <div class="compare-math">
+      <h4>The napkin math</h4>
+      <div class="math-grid">
+        <div class="math-item">
+          <span class="math-label">Alibaba Pro plan</span>
+          <span class="math-value">$68/mo</span>
+          <span class="math-detail">5.86B tokens · 93% cache hit</span>
+        </div>
+        <div class="math-item">
+          <span class="math-label">Effective rate</span>
+          <span class="math-value">$0.012/M</span>
+          <span class="math-detail">vs Claude $5-25/M · vs GPT $2.5-10/M</span>
+        </div>
+        <div class="math-item">
+          <span class="math-label">Avg ticket cost</span>
+          <span class="math-value">$0.03–0.15</span>
+          <span class="math-detail">depending on complexity + retries</span>
+        </div>
+        <div class="math-item">
+          <span class="math-label">Tickets before plan runs out</span>
+          <span class="math-value">~4,000+</span>
+          <span class="math-detail">per month on a single $68 plan</span>
+        </div>
+      </div>
+      <p class="math-note">At these rates, even our Solo plan at $49/mo is cheaper than your time spent setting up and maintaining a self-hosted instance — unless you genuinely enjoy DevOps.</p>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" class="section">
+    <div class="section-header">
+      <span class="section-tag">MANAGED PLANS</span>
+      <h2>Pick your power level</h2>
+      <p class="section-sub">All plans include 7-day free trial. No credit card required to start. Cancel anytime.</p>
+    </div>
+
     <div class="pricing-grid">
       <div class="price-card">
-        <div class="price-tier">SOLO</div>
+        <div class="price-name">SOLO</div>
         <div class="price-amount">$49<span>/mo</span></div>
+        <p class="price-tagline">For indie hackers running their first autonomous agents</p>
         <ul class="price-features">
           <li>1 user</li>
           <li>3 projects</li>
           <li>500 tickets/month</li>
-          <li>Shared API credits</li>
-          <li>Community support</li>
-          <li>Dashboard access</li>
+          <li>Shared model credits included</li>
+          <li>Dashboard + Telegram bot</li>
+          <li>Community Discord support</li>
         </ul>
-        <a href="#" class="btn btn-price" data-tier="solo">Get Solo</a>
+        <a href="#" class="btn btn-outline btn-full" data-tier="solo">Start Free Trial</a>
       </div>
+
       <div class="price-card featured">
-        <div class="price-badge">MOST POPULAR</div>
-        <div class="price-tier">SQUAD</div>
+        <div class="price-popular">MOST POPULAR</div>
+        <div class="price-name">SQUAD</div>
         <div class="price-amount">$149<span>/mo</span></div>
+        <p class="price-tagline">For small teams shipping multiple products in parallel</p>
         <ul class="price-features">
           <li>5 users</li>
           <li>Unlimited projects</li>
           <li>2,000 tickets/month</li>
-          <li>Priority model routing</li>
-          <li>Priority support</li>
-          <li>Telegram bot included</li>
+          <li>Priority model routing (faster models)</li>
           <li>Custom tool integrations</li>
+          <li>Priority support (4hr response)</li>
+          <li>Advanced blast radius rules</li>
         </ul>
-        <a href="#" class="btn btn-price btn-primary" data-tier="squad">Get Squad</a>
+        <a href="#" class="btn btn-primary btn-full" data-tier="squad">Start Free Trial</a>
       </div>
+
       <div class="price-card empire">
-        <div class="price-tier">EMPIRE</div>
+        <div class="price-name">EMPIRE</div>
         <div class="price-amount">$499<span>/mo</span></div>
+        <p class="price-tagline">For companies that need guaranteed autonomous throughput</p>
         <ul class="price-features">
           <li>Unlimited users</li>
           <li>Unlimited projects</li>
           <li>Unlimited tickets</li>
           <li>Dedicated infrastructure</li>
-          <li>99.9% SLA</li>
-          <li>White-glove onboarding</li>
+          <li>99.9% uptime SLA</li>
+          <li>White-glove onboarding call</li>
           <li>Custom model fine-tuning</li>
           <li>Direct Slack/Telegram channel</li>
         </ul>
-        <a href="#" class="btn btn-price btn-empire" data-tier="empire">Get Empire</a>
+        <a href="#" class="btn btn-empire btn-full" data-tier="empire">Talk to Us</a>
       </div>
-    </div>
-    <div class="oss-callout">
-      <p>Or self-host for free — <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener">grab the source on GitHub</a></p>
     </div>
   </section>
 
-  <section class="how-it-works">
-    <h2 class="section-title">How it <span class="gradient-text">works</span></h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">01</div>
-        <h3>Connect</h3>
-        <p>Link your Linear, GitHub, and Telegram. Nightforge watches for tickets.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">02</div>
-        <h3>Configure</h3>
-        <p>Set effort levels, model preferences, and blast radius rules per project.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">03</div>
-        <h3>Autonomous</h3>
-        <p>Agents pick up tickets, implement, test, deploy. You get Telegram updates.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">04</div>
-        <h3>Ship</h3>
-        <p>Code is live. Health checks pass. Cost logged. Next ticket claimed.</p>
+  <!-- FEATURES STRIP -->
+  <section class="section section-features">
+    <div class="features-marquee">
+      <div class="marquee-track">
+        <span>Auto-merge pipeline</span><span class="sep">◆</span>
+        <span>Multi-model router</span><span class="sep">◆</span>
+        <span>Blast radius control</span><span class="sep">◆</span>
+        <span>Instant rollback</span><span class="sep">◆</span>
+        <span>Per-ticket cost tracking</span><span class="sep">◆</span>
+        <span>6-8 concurrent agents</span><span class="sep">◆</span>
+        <span>Git worktree isolation</span><span class="sep">◆</span>
+        <span>Telegram approvals</span><span class="sep">◆</span>
+        <span>Speed metrics dashboard</span><span class="sep">◆</span>
+        <span>Auto-merge pipeline</span><span class="sep">◆</span>
+        <span>Multi-model router</span><span class="sep">◆</span>
+        <span>Blast radius control</span><span class="sep">◆</span>
+        <span>Instant rollback</span><span class="sep">◆</span>
+        <span>Per-ticket cost tracking</span><span class="sep">◆</span>
+        <span>6-8 concurrent agents</span><span class="sep">◆</span>
+        <span>Git worktree isolation</span><span class="sep">◆</span>
+        <span>Telegram approvals</span><span class="sep">◆</span>
+        <span>Speed metrics dashboard</span><span class="sep">◆</span>
       </div>
     </div>
   </section>
 
   <footer class="footer">
-    <div class="footer-grid">
+    <div class="footer-inner">
       <div class="footer-brand">
-        <span class="brand-text">NIGHT<span class="glow">FORGE</span></span>
-        <p>Autonomous AI agent orchestrator.<br>Open source under MIT license.</p>
+        <span class="brand-mark">NF</span>
+        <span class="brand-word">NIGHTFORGE</span>
+        <p>Autonomous AI agent orchestrator.<br>Open source under MIT. Built by <a href="https://qolso.com" target="_blank" rel="noopener">Qolso</a>.</p>
       </div>
-      <div class="footer-links">
-        <h4>Product</h4>
-        <a href="#features">Features</a>
-        <a href="#pricing">Pricing</a>
-        <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener">GitHub</a>
-      </div>
-      <div class="footer-links">
-        <h4>Company</h4>
-        <a href="https://qolso.com" target="_blank" rel="noopener">Qolso</a>
-        <a href="mailto:hello@getnightforge.com">Contact</a>
+      <div class="footer-cols">
+        <div>
+          <h4>Product</h4>
+          <a href="#how">How It Works</a>
+          <a href="#compare">Self-Host vs Managed</a>
+          <a href="#pricing">Pricing</a>
+        </div>
+        <div>
+          <h4>Developers</h4>
+          <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/sonozaki7/Nightforge/blob/main/NIGHTFORGE.md" target="_blank" rel="noopener">Spec</a>
+          <a href="https://github.com/sonozaki7/Nightforge/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+        </div>
+        <div>
+          <h4>Company</h4>
+          <a href="https://qolso.com" target="_blank" rel="noopener">Qolso</a>
+          <a href="mailto:hello@getnightforge.com">Contact</a>
+        </div>
       </div>
     </div>
     <div class="footer-bottom">
-      <p>&copy; 2026 Nightforge. Built by <a href="https://qolso.com" target="_blank" rel="noopener">Qolso</a>.</p>
+      <p>&copy; 2026 Nightforge · MIT Licensed · <a href="https://github.com/sonozaki7/Nightforge" target="_blank" rel="noopener">github.com/sonozaki7/Nightforge</a></p>
     </div>
   </footer>
 

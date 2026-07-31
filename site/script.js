@@ -1,57 +1,103 @@
-// Nightforge landing page — minimal JS
-// Terminal typing animation + smooth scroll + Stripe checkout redirect
+// Nightforge landing — particles, scroll reveals, checkout
+(function () {
+  "use strict";
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Animate terminal lines on scroll into view
-  const terminal = document.querySelector(".terminal-body");
-  if (terminal) {
-    const lines = terminal.querySelectorAll(".line");
-    lines.forEach((line, i) => {
-      line.style.opacity = "0";
-      line.style.transform = "translateX(-10px)";
-      line.style.transition = `all 0.3s ease ${i * 0.15}s`;
-    });
+  // ─── Particle Canvas ───
+  const canvas = document.getElementById("particles");
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    let w, h, particles;
 
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+
+    function createParticles() {
+      const count = Math.min(60, Math.floor((w * h) / 25000));
+      particles = Array.from({ length: count }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        r: Math.random() * 1.2 + 0.3,
+        alpha: Math.random() * 0.4 + 0.1,
+      }));
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 229, 255, ${p.alpha})`;
+        ctx.fill();
+
+        // Draw connections
+        for (let j = i + 1; j < particles.length; j++) {
+          const q = particles[j];
+          const dx = p.x - q.x;
+          const dy = p.y - q.y;
+          const dist = dx * dx + dy * dy;
+          if (dist < 12000) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(q.x, q.y);
+            ctx.strokeStyle = `rgba(0, 229, 255, ${0.06 * (1 - dist / 12000)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    createParticles();
+    draw();
+    window.addEventListener("resize", () => { resize(); createParticles(); });
+  }
+
+  // ─── Scroll Reveals ───
+  const revealEls = document.querySelectorAll(
+    ".pipe-step, .compare-card, .price-card, .compare-math, .section-header"
+  );
+
+  if (revealEls.length) {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            lines.forEach((line) => {
-              line.style.opacity = "1";
-              line.style.transform = "translateX(0)";
-            });
-            observer.disconnect();
+            entry.target.classList.add("revealed");
+            observer.unobserve(entry.target);
           }
         });
       },
-      { threshold: 0.3 }
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
     );
-    observer.observe(terminal);
+
+    revealEls.forEach((el, i) => {
+      el.style.opacity = "0";
+      el.style.transform = "translateY(24px)";
+      el.style.transition = `opacity 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s, transform 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s`;
+      observer.observe(el);
+    });
   }
 
-  // Feature cards stagger animation
-  const cards = document.querySelectorAll(".feature-card");
-  const cardObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.style.opacity = "1";
-          entry.target.style.transform = "translateY(0)";
-        }
-      });
-    },
-    { threshold: 0.1 }
-  );
+  // Revealed state
+  const style = document.createElement("style");
+  style.textContent = ".revealed { opacity: 1 !important; transform: translateY(0) !important; }";
+  document.head.appendChild(style);
 
-  cards.forEach((card, i) => {
-    card.style.opacity = "0";
-    card.style.transform = "translateY(20px)";
-    card.style.transition = `all 0.4s ease ${i * 0.1}s`;
-    cardObserver.observe(card);
-  });
-
-  // Pricing button click → Stripe checkout (placeholder URLs)
-  // Replace these with real Stripe Payment Link URLs after setup
+  // ─── Stripe Checkout ───
   const STRIPE_LINKS = {
     solo: "https://buy.stripe.com/test_eVq3cxb2iabb0tQ3aw6Ri00",
     squad: "https://buy.stripe.com/test_28E9AVgmC6YZdgCaCY6Ri01",
@@ -62,26 +108,27 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const tier = btn.dataset.tier;
-      if (!tier) return;
       const link = STRIPE_LINKS[tier];
-      if (link && !link.startsWith("#stripe-")) {
+      if (link) {
         window.location.href = link;
-      } else {
-        // Placeholder: scroll to contact or show coming soon
-        alert(
-          `${tier.charAt(0).toUpperCase() + tier.slice(1)} tier — Stripe checkout coming soon.\n\nEmail hello@getnightforge.com for early access.`
-        );
       }
     });
   });
 
-  // Nav background on scroll
+  // ─── Nav scroll state ───
   const nav = document.querySelector(".nav");
+  let ticking = false;
   window.addEventListener("scroll", () => {
-    if (window.scrollY > 50) {
-      nav?.classList.add("scrolled");
-    } else {
-      nav?.classList.remove("scrolled");
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        if (window.scrollY > 60) {
+          nav.style.borderBottomColor = "rgba(30,30,46,0.8)";
+        } else {
+          nav.style.borderBottomColor = "";
+        }
+        ticking = false;
+      });
+      ticking = true;
     }
   });
-});
+})();
