@@ -9,22 +9,22 @@ const configSchema = z.object({
     webhookSecret: z.string().min(1, "LINEAR_WEBHOOK_SECRET is required"),
   }),
   telegram: z.object({
-    botToken: z.string().min(1, "TELEGRAM_BOT_TOKEN is required"),
-    chatId: z.string().min(1, "TELEGRAM_CHAT_ID is required"),
+    botToken: z.string().default(""),
+    chatId: z.string().default(""),
   }),
   providers: z.object({
     dashscope: z.object({
-      apiKey: z.string().min(1, "DASHSCOPE_API_KEY is required"),
+      apiKey: z.string().default(""),
       baseUrl: z
         .string()
         .url()
         .default("https://dashscope.aliyuncs.com/compatible-mode/v1"),
     }),
     anthropic: z.object({
-      apiKey: z.string().min(1, "ANTHROPIC_API_KEY is required"),
+      apiKey: z.string().default(""),
     }),
     openrouter: z.object({
-      apiKey: z.string().min(1, "OPENROUTER_API_KEY is required"),
+      apiKey: z.string().default(""),
       baseUrl: z
         .string()
         .url()
