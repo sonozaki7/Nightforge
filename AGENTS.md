@@ -12,6 +12,17 @@ Rules for AI agents implementing the Nightforge platform itself.
 
 ---
 
+## Communication Style (very important)
+
+- The user is NOT a technical expert. Use plain, simple language at all times.
+- Avoid jargon, acronyms, and technical terms without a short plain-language explanation.
+- Whenever you use a technical term (e.g. TUI, API, webhook, queue, subprocess), briefly explain what it means in simple words.
+- Use everyday analogies (e.g. "a queue is like a line of people waiting") to make concepts clear.
+- Keep explanations short and friendly. If the user asks "what does X mean", answer simply first, then add detail only if helpful.
+- **Always end with exact actions.** When something needs fixing, configuring, or deciding, do not just describe the problem — list the precise steps for the user to take (or offer to do them yourself). Say exactly what to click, what to install, what to paste, in order. A list of "this needs X" without steps is not useful.
+
+---
+
 ## Scope Discipline
 
 - Work ONLY within the assigned ticket/step scope.

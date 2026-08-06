@@ -53,7 +53,7 @@ const tiers = [
   },
   {
     name: "Nightforge Squad",
-    description: "5 users, unlimited projects, 2000 tickets/month, priority routing, Telegram bot",
+    description: "5 users, unlimited projects, 2000 tickets/month, priority routing, dashboard",
     amount: 14900,
     lookupKey: "nightforge-squad-monthly",
   },

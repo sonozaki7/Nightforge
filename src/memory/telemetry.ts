@@ -16,6 +16,8 @@ export interface TicketCostRecord {
   durationMs: number;
   success: boolean;
   timestamp: number;
+  /** Prompt registry version that produced the run (Phase 6 attribution). */
+  promptVersion?: string;
 }
 
 export interface Telemetry {
@@ -49,6 +51,7 @@ export function createTelemetry(redis: Redis): Telemetry {
           model: record.model,
           costUsd: record.costUsd,
           success: record.success,
+          promptVersion: record.promptVersion ?? "unknown",
         },
         "Ticket cost recorded"
       );

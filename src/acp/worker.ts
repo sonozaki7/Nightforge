@@ -29,11 +29,11 @@ const logger = pino({ name: "nightforge-acp-worker" });
 export interface AcpWorkerConfig {
   /** Working directory for the ACP session (project root) */
   cwd: string;
-  /** Approval handler for permission requests (Telegram) */
+  /** Approval handler for permission requests */
   approvalHandler: ApprovalHandler;
   /** Timeout for the entire ACP session (ms). Default: 30 minutes */
   sessionTimeoutMs?: number;
-  /** Whether to auto-approve all permission requests (skip Telegram) */
+  /** Whether to auto-approve all permission requests */
   autoApprove?: boolean;
 }
 
@@ -48,7 +48,7 @@ const DEFAULT_SESSION_TIMEOUT = 1_800_000; // 30 minutes
  * 3. Initialize + create session
  * 4. Send the ticket as a prompt
  * 5. Collect session updates (progress, tool calls)
- * 6. Handle permission requests via Telegram approval
+ * 6. Handle permission requests through the approval handler
  * 7. Return the final result
  */
 export async function executeAcpWorker(
@@ -174,7 +174,7 @@ function createPermissionHandler(
   log: pino.Logger
 ): (request: PermissionRequest) => Promise<PermissionResponse> {
   return async (request: PermissionRequest): Promise<PermissionResponse> => {
-    // Auto-approve mode: skip Telegram, allow everything
+    // Auto-approve mode: allow everything without asking
     if (config.autoApprove) {
       log.info({ tool: request.toolName }, "Auto-approving permission request");
       return "allow";

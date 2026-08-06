@@ -7,6 +7,7 @@ import {
   type ProviderConfig,
   calculateCost,
 } from "./base.js";
+import { withRetry } from "./retry.js";
 
 const logger = pino({ name: "nightforge-openrouter" });
 
@@ -58,12 +59,16 @@ export function createOpenRouterProvider(config: ProviderConfig): Provider {
 
       messages.push({ role: "user", content: prompt });
 
-      const response = await client.chat.completions.create({
-        model,
-        messages,
-        max_tokens: options?.maxTokens ?? 8192,
-        temperature: options?.temperature ?? 0.7,
-      });
+      const response = await withRetry(
+        () =>
+          client.chat.completions.create({
+            model,
+            messages,
+            max_tokens: options?.maxTokens ?? 8192,
+            temperature: options?.temperature ?? 0.7,
+          }),
+        { maxAttempts: 4, baseDelayMs: 1000 }
+      );
 
       const durationMs = Date.now() - startTime;
       const content = response.choices[0]?.message.content ?? "";

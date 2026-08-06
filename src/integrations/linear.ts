@@ -22,6 +22,7 @@ export interface LinearClient {
     secret: string
   ): boolean;
   getIssue(issueId: string): Promise<LinearIssue | null>;
+  getChildIssues(parentIssueId: string): Promise<LinearIssue[]>;
   postComment(issueId: string, body: string): Promise<void>;
   updateIssueState(issueId: string, stateName: string): Promise<void>;
 }
@@ -70,10 +71,14 @@ export function createLinearClient(apiKey: string): LinearClient {
         .createHmac("sha256", secret)
         .update(payload)
         .digest("hex");
-      return crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(expectedSignature)
-      );
+      const provided = Buffer.from(signature);
+      const expected = Buffer.from(expectedSignature);
+      // timingSafeEqual throws on length mismatch; a malformed signature
+      // must simply be rejected, not crash the webhook handler.
+      if (provided.length !== expected.length) {
+        return false;
+      }
+      return crypto.timingSafeEqual(provided, expected);
     },
 
     async getIssue(issueId: string): Promise<LinearIssue | null> {
@@ -122,6 +127,63 @@ export function createLinearClient(apiKey: string): LinearClient {
       } catch (err) {
         logger.error({ err, issueId }, "Failed to get issue");
         return null;
+      }
+    },
+
+    async getChildIssues(parentIssueId: string): Promise<LinearIssue[]> {
+      const query = `
+        query GetChildIssues($id: String!) {
+          issue(id: $id) {
+            children {
+              nodes {
+                id
+                identifier
+                title
+                description
+                priority
+                state {
+                  name
+                }
+                labels {
+                  nodes {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+
+      try {
+        const data = await graphqlRequest<{
+          issue: {
+            children: {
+              nodes: Array<{
+                id: string;
+                identifier: string;
+                title: string;
+                description: string | null;
+                priority: number;
+                state: { name: string };
+                labels: { nodes: Array<{ name: string }> };
+              }>;
+            };
+          };
+        }>(query, { id: parentIssueId });
+
+        return data.issue.children.nodes.map((child) => ({
+          id: child.id,
+          identifier: child.identifier,
+          title: child.title,
+          description: child.description,
+          priority: child.priority,
+          stateName: child.state.name,
+          labels: child.labels.nodes.map((l) => l.name),
+        }));
+      } catch (err) {
+        logger.error({ err, parentIssueId }, "Failed to get child issues");
+        return [];
       }
     },
 

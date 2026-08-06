@@ -5,6 +5,14 @@ import pino from "pino";
 const execFileAsync = promisify(execFile);
 const logger = pino({ name: "nightforge-auto-merge" });
 
+/** Identity for orchestrator commits; avoids relying on ambient git config. */
+const GIT_IDENTITY = [
+  "-c",
+  "user.name=Nightforge Orchestrator",
+  "-c",
+  "user.email=orchestrator@getnightforge.com",
+];
+
 export interface AutoMergeResult {
   success: boolean;
   commitSha: string | null;
@@ -38,7 +46,12 @@ export function createAutoMerger(): AutoMerger {
       const tag = `deploy/${ticketId}`;
 
       try {
-        // Stage all changes in the worktree
+        // Stage all changes in the worktree. node_modules must never be
+        // committed — a tracked symlink there corrupted every checkout once.
+        // The repo's .gitignore covers node_modules (dirs AND symlinks), so
+        // a plain `git add -A` cannot stage it. An explicit :(exclude)
+        // pathspec backfires: git reports "paths are ignored" and exits
+        // non-zero, aborting the merge.
         await execFileAsync("git", ["add", "-A"], { cwd: worktreePath });
 
         // Check if there are changes to commit
@@ -63,7 +76,7 @@ export function createAutoMerger(): AutoMerger {
         const commitMsg = `feat(${ticketId}): ${summary.slice(0, 72)}`;
         await execFileAsync(
           "git",
-          ["commit", "-m", commitMsg, "--no-verify"],
+          [...GIT_IDENTITY, "commit", "-m", commitMsg, "--no-verify"],
           { cwd: worktreePath }
         );
 
@@ -75,22 +88,24 @@ export function createAutoMerger(): AutoMerger {
 
         log.info({ commitSha: commitSha.trim() }, "Changes committed");
 
-        // Merge into main from the main repo
-        // First fetch the worktree branch
-        await execFileAsync(
-          "git",
-          ["fetch", worktreePath, `HEAD:${branchName}`],
-          { cwd: mainRepoPath }
-        );
-
-        // Checkout main and merge
+        // Merge the worktree commit into main. Merging the SHA directly
+        // avoids fetching into the branch, which git refuses while the
+        // branch is checked out in the worktree.
         await execFileAsync("git", ["checkout", "main"], {
           cwd: mainRepoPath,
         });
 
         await execFileAsync(
           "git",
-          ["merge", branchName, "--no-edit", "-m", `merge: ${ticketId} — ${summary.slice(0, 50)}`],
+          [
+            ...GIT_IDENTITY,
+            "merge",
+            commitSha.trim(),
+            "--no-ff",
+            "--no-edit",
+            "-m",
+            `merge: ${ticketId} — ${summary.slice(0, 50)}`,
+          ],
           { cwd: mainRepoPath }
         );
 
@@ -103,14 +118,26 @@ export function createAutoMerger(): AutoMerger {
         // Tag the deployment
         await execFileAsync(
           "git",
-          ["tag", "-f", tag, "-m", `Auto-deployed: ${summary.slice(0, 50)}`],
+          [
+            ...GIT_IDENTITY,
+            "tag",
+            "-f",
+            tag,
+            "-m",
+            `Auto-deployed: ${summary.slice(0, 50)}`,
+          ],
           { cwd: mainRepoPath }
         );
 
         // Cleanup the temporary branch
-        await execFileAsync("git", ["branch", "-D", branchName], {
-          cwd: mainRepoPath,
-        });
+        try {
+          await execFileAsync("git", ["branch", "-D", branchName], {
+            cwd: mainRepoPath,
+          });
+        } catch {
+          // Branch only exists if the sandbox kept it; worktree cleanup
+          // already deletes it in the common path.
+        }
 
         log.info(
           { mergeSha: mergeSha.trim(), tag },
@@ -158,7 +185,7 @@ export function createAutoMerger(): AutoMerger {
         // Revert the merge commit (-m 1 = revert to first parent)
         await execFileAsync(
           "git",
-          ["revert", "-m", "1", "--no-edit", mergeSha],
+          [...GIT_IDENTITY, "revert", "-m", "1", "--no-edit", mergeSha],
           { cwd: mainRepoPath }
         );
 

@@ -1,6 +1,6 @@
-id: my-saas
-name: My SaaS Product
-path: /srv/apps/my-saas/repository
+id: nightforge
+name: Nightforge
+path: /opt/nightforge/projects/nightforge
 
 deployment:
   policy: direct-prod
@@ -8,11 +8,17 @@ deployment:
   lintCommand: npm run lint
   typecheckCommand: npx tsc --noEmit
   buildCommand: npm run build
-  deployCommand: ./ops/deploy.sh
-  healthcheckCommand: ./ops/healthcheck.sh
-  rollbackCommand: ./ops/rollback.sh
+  # Runs inside the staged release dir: installs runtime deps and marks the
+  # release pending. The external watchdog (root systemd timer) performs the
+  # actual restart — Nightforge never restarts itself.
+  deployCommand: bash ops/prepare-release.sh
+  # Verifies the staged release is bootable without touching the live service.
+  healthcheckCommand: bash ops/self-verify.sh
+  # Symlink revert is handled by the deployer; the watchdog reconciles state.
+  rollbackCommand: node -e process.exit(0)
 
 concurrency:
+  # Only one writer on Nightforge's own codebase at a time.
   maxWriteTasks: 1
   maxReadonlyTasks: 3
 
@@ -25,17 +31,17 @@ agent:
 permissions:
   allowedServices:
     - github
-    - sentry
-    - cloudflare
   prohibitedActions:
-    - delete-production-database
     - rotate-production-secrets
+    - delete-production-database
     - disable-authentication
-    - modify-billing-without-approval
+    - modify-release-watchdog
+    - modify-systemd-units
+    - flush-redis
 
 risk:
   approvalRequiredFor:
     - billing
     - authentication
     - destructive-migration
-    - account-deletion
+    - release-pipeline-changes

@@ -7,6 +7,7 @@ import {
   type ProviderConfig,
   calculateCost,
 } from "./base.js";
+import { withRetry } from "./retry.js";
 
 const logger = pino({ name: "nightforge-deepseek" });
 
@@ -47,7 +48,7 @@ export function createDeepSeekProvider(config: ProviderConfig): Provider {
     ): Promise<GenerateResult> {
       const startTime = Date.now();
 
-      logger.info({ model }, "Calling OpenRouter API (DeepSeek)");
+      logger.info({ model }, "Calling DeepSeek API");
 
       const systemMessage = buildSystemMessage(options);
       const messages: Array<{ role: "system" | "user"; content: string }> = [];
@@ -58,12 +59,16 @@ export function createDeepSeekProvider(config: ProviderConfig): Provider {
 
       messages.push({ role: "user", content: prompt });
 
-      const response = await client.chat.completions.create({
-        model,
-        messages,
-        max_tokens: options?.maxTokens ?? 8192,
-        temperature: options?.temperature ?? 0.3,
-      });
+      const response = await withRetry(
+        () =>
+          client.chat.completions.create({
+            model,
+            messages,
+            max_tokens: options?.maxTokens ?? 8192,
+            temperature: options?.temperature ?? 0.3,
+          }),
+        { maxAttempts: 4, baseDelayMs: 1000 }
+      );
 
       const durationMs = Date.now() - startTime;
       const content = response.choices[0]?.message.content ?? "";
@@ -83,7 +88,7 @@ export function createDeepSeekProvider(config: ProviderConfig): Provider {
 
       logger.info(
         { model, tokensUsed, cachedInputTokens, costUsd, durationMs },
-        "OpenRouter API response received (DeepSeek)"
+        "DeepSeek API response received"
       );
 
       return {

@@ -2,12 +2,12 @@ import { Worker } from "bullmq";
 import type { Job } from "bullmq";
 import type { Redis } from "ioredis";
 import pino from "pino";
-import { QUEUE_NAME, type TicketJob } from "./scheduler.js";
+import { QUEUE_NAME, type JobOutcome, type TicketJob } from "./scheduler.js";
 import type { LockManager } from "./locks.js";
 
 const logger = pino({ name: "nightforge-dispatcher" });
 
-export type JobHandler = (job: TicketJob) => Promise<void>;
+export type JobHandler = (job: TicketJob) => Promise<JobOutcome | undefined>;
 
 export interface Dispatcher {
   start(): void;
@@ -23,9 +23,9 @@ export function createDispatcher(
 ): Dispatcher {
   let activeCount = 0;
 
-  const worker = new Worker(
+  const worker = new Worker<TicketJob, JobOutcome>(
     QUEUE_NAME,
-    async (job: Job<TicketJob>) => {
+    async (job: Job<TicketJob>): Promise<JobOutcome> => {
       const data = job.data;
       const log = logger.child({
         ticketId: data.ticketId,
@@ -47,8 +47,13 @@ export function createDispatcher(
       activeCount++;
       try {
         log.info("Processing ticket");
-        await handler(data);
+        const outcome = await handler(data);
         log.info("Ticket completed successfully");
+        return outcome ?? { success: true, summary: "completed" };
+      } catch (err) {
+        // Never let a handler failure vanish into BullMQ silently.
+        log.error({ err: (err as Error).message }, "Ticket processing failed");
+        throw err;
       } finally {
         activeCount--;
         await lockManager.release(data.projectId, data.ticketId);

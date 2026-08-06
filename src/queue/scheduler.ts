@@ -1,4 +1,4 @@
-import { Queue } from "bullmq";
+import { Queue, QueueEvents } from "bullmq";
 import type { Redis } from "ioredis";
 import pino from "pino";
 
@@ -20,6 +20,8 @@ export interface TicketJob {
   effort?: "high" | "xhigh" | "max";
   /** Automation schedule (only for recurring automations) */
   schedule?: AutomationSchedule;
+  /** True when this job is a release-only re-run after a human `/approve`. */
+  approvalGranted?: boolean;
 }
 
 /** Schedule configuration for recurring automations */
@@ -35,6 +37,12 @@ export interface AutomationSchedule {
 }
 
 export type TicketPriority = "urgent" | "high" | "normal" | "low";
+
+/** Terminal outcome of one ticket job, reported back to callers that wait. */
+export interface JobOutcome {
+  success: boolean;
+  summary: string;
+}
 
 const PRIORITY_MAP: Record<TicketPriority, number> = {
   urgent: 1,
@@ -58,6 +66,8 @@ export function linearPriorityToNightforge(
 
 export interface Scheduler {
   enqueue(job: TicketJob): Promise<string>;
+  /** Enqueue and wait for the terminal outcome (used by the epic executor). */
+  enqueueAndWait(job: TicketJob): Promise<JobOutcome>;
   getQueueStats(): Promise<{
     waiting: number;
     active: number;
@@ -68,7 +78,7 @@ export interface Scheduler {
 }
 
 export function createScheduler(redis: Redis): Scheduler {
-  const queue = new Queue(QUEUE_NAME, {
+  const queue = new Queue<TicketJob, JobOutcome | undefined>(QUEUE_NAME, {
     connection: redis,
     defaultJobOptions: {
       attempts: 3,
@@ -86,12 +96,21 @@ export function createScheduler(redis: Redis): Scheduler {
     },
   });
 
+  const events = new QueueEvents(QUEUE_NAME, { connection: redis });
+
+  const jobOptions = (
+    job: TicketJob
+  ): { priority: number; jobId: string } => ({
+    priority: job.priority,
+    // A fresh id per trigger: BullMQ silently ignores an add when a job with
+    // the same id already exists (completed jobs linger for 24h), so a
+    // re-triggered ticket would never run again without the suffix.
+    jobId: `${job.projectId}-${job.ticketId}-${String(job.attempt)}-${Date.now().toString(36)}`,
+  });
+
   return {
     async enqueue(job: TicketJob): Promise<string> {
-      const bullJob = await queue.add("process-ticket", job, {
-        priority: job.priority,
-        jobId: `${job.projectId}-${job.ticketId}-${String(job.attempt)}`,
-      });
+      const bullJob = await queue.add("process-ticket", job, jobOptions(job));
 
       logger.info(
         {
@@ -104,6 +123,19 @@ export function createScheduler(redis: Redis): Scheduler {
       );
 
       return bullJob.id ?? "";
+    },
+
+    async enqueueAndWait(job: TicketJob): Promise<JobOutcome> {
+      const bullJob = await queue.add("process-ticket", job, jobOptions(job));
+      try {
+        const result = await bullJob.waitUntilFinished(events);
+        return result ?? { success: true, summary: "completed" };
+      } catch (error: unknown) {
+        return {
+          success: false,
+          summary: error instanceof Error ? error.message : String(error),
+        };
+      }
     },
 
     async getQueueStats(): Promise<{
@@ -123,6 +155,7 @@ export function createScheduler(redis: Redis): Scheduler {
     },
 
     async close(): Promise<void> {
+      await events.close();
       await queue.close();
       logger.info("Scheduler closed");
     },

@@ -13,7 +13,10 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "eslint src/ tests/ --no-error-on-unmatched-pattern",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "diagnostics": "tsx src/cli/diagnostics.ts",
+    "setup": "tsx src/cli/setup-wizard.ts",
+    "bench": "tsx src/cli/bench.ts"
   },
   "keywords": [
     "ai",

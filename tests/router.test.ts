@@ -2,6 +2,11 @@ import { describe, it, expect } from "vitest";
 import { calculateCost, type Provider } from "../src/router/providers/base.js";
 import type { ModelRouter } from "../src/router/model-router.js";
 import type { EscalationManager } from "../src/router/escalation.js";
+import { createRouteResolver } from "../src/router/route-resolver.js";
+import { createAdaptiveRouter } from "../src/router/adaptive-router.js";
+import type { ModelDescriptor, TieredModelRouter } from "../src/router/model-tiers.js";
+import type { ModelProviderRegistry } from "../src/router/provider-registry.js";
+import type { ModelProvider } from "../src/workers/worker.js";
 
 const mockQwenProvider: Provider = {
   name: "qwen",
@@ -464,5 +469,57 @@ describe("escalation manager", () => {
     expect(manager.shouldEscalate(1, 2)).toBe(false);
     expect(manager.shouldEscalate(2, 2)).toBe(false);
     expect(manager.shouldEscalate(3, 2)).toBe(true);
+  });
+});
+
+describe("route-resolver fallback", () => {
+  const keyless: ModelDescriptor = { id: "deepseek-v4-flash", tier: "leaf", family: "deepseek", shadowCostPerRun: 1 };
+  const keyed: ModelDescriptor = { id: "qwen3.8-max", tier: "leaf", family: "qwen", shadowCostPerRun: 2 };
+
+  const tieredRouter: TieredModelRouter = {
+    select: (): ModelDescriptor => keyless,
+    modelsInTier: (): ModelDescriptor[] => [keyless, keyed],
+  };
+
+  const realProvider: ModelProvider = {
+    generate: () => Promise.resolve({ content: "", tokensUsed: 0, costUsd: 0 }),
+  };
+  const fallbackProvider: ModelProvider = {
+    generate: () => Promise.resolve({ content: "mock", tokensUsed: 100, costUsd: 0 }),
+  };
+
+  it("falls back to another family in the same tier before the mock", async () => {
+    const registry: ModelProviderRegistry = {
+      resolve: (descriptor: ModelDescriptor): ModelProvider | null =>
+        descriptor.family === "qwen" ? realProvider : null,
+      availableFamilies: (): string[] => ["qwen"],
+    };
+    const resolver = createRouteResolver({
+      tieredRouter,
+      adaptiveRouter: createAdaptiveRouter(),
+      registry,
+      fallback: fallbackProvider,
+    });
+
+    const provider = resolver.resolve({ role: "implementer" });
+    const result = await provider.generate("test");
+    expect(result.content).toBe(""); // real provider, not the mock
+  });
+
+  it("uses the configured fallback only when no family has a key", async () => {
+    const registry: ModelProviderRegistry = {
+      resolve: (): null => null,
+      availableFamilies: (): string[] => [],
+    };
+    const resolver = createRouteResolver({
+      tieredRouter,
+      adaptiveRouter: createAdaptiveRouter(),
+      registry,
+      fallback: fallbackProvider,
+    });
+
+    const provider = resolver.resolve({ role: "implementer" });
+    const result = await provider.generate("test");
+    expect(result.content).toBe("mock");
   });
 });

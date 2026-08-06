@@ -26,7 +26,7 @@ A self-hosted TypeScript orchestration platform running on a VPS that:
 - Dispatches concurrent AI agents to implement them
 - Routes each ticket to the cheapest capable model
 - Tests, builds, deploys atomically, verifies, and rolls back on failure
-- Reports results via Telegram and Linear comments
+- Reports results via Linear comments
 - Manages multiple SaaS projects simultaneously from one control layer
 - Works 24/7 but optimizes for overnight batch (human sleeps, forge burns)
 
@@ -51,7 +51,6 @@ A self-hosted TypeScript orchestration platform running on a VPS that:
 
 **Morning (review):**
 
-- Telegram summary: "7 tickets completed, 2 need review, 1 rolled back"
 - Open Linear on phone
 - Approve/reject/re-queue from anywhere
 - Answer "Needs Input" tickets with clarifications
@@ -69,12 +68,12 @@ Linear (Kanban board, phone/laptop)
 |        NIGHTFORGE ORCHESTRATOR           |
 |        (Fastify HTTP server)             |
 |                                          |
-|  +------------+    +------------------+  |
-|  | Webhook    |    | Telegram Bot     |  |
-|  | Receiver   |    | (commands+notify)|  |
-|  +-----+------+    +--------+---------+  |
-|        |                     |           |
-|        v                     v           |
+|  +------------+                          |
+|  | Webhook    |                          |
+|  | Receiver   |                          |
+|  +-----+------+                          |
+|        |                                 |
+|        v                                 |
 |  +----------------------------------+   |
 |  |     BullMQ Task Queue (Redis)    |   |
 |  +----------------------------------+   |
@@ -147,7 +146,6 @@ nightforge/
 │   │   └── deployer.ts          # Atomic deploy + rollback controller
 │   ├── integrations/
 │   │   ├── linear.ts            # Linear webhook + GraphQL API client
-│   │   ├── telegram.ts          # Telegram Bot API (notify + commands)
 │   │   └── health.ts            # Post-deploy verification pipeline
 │   ├── memory/
 │   │   ├── project-context.ts   # Per-project architecture/rules cache
@@ -182,7 +180,6 @@ nightforge/
 | HTTP | Fastify | Fast, typed, plugin ecosystem, webhook-friendly |
 | Queue | BullMQ + Redis 7 | Durable, priority queues, retry, concurrency control, locks |
 | Board | Linear ($10/mo Basic) | Native agent sessions, webhooks, GraphQL API, mobile app |
-| Notifications | Telegram Bot API | Mobile commands, instant push, already in use |
 | Default model | Qwen 3.8 via DashScope | Cheapest available inference, OpenAI-compatible endpoint |
 | Escalation | Claude API (pay-per-use) | Best for hard architecture/security/debugging |
 | Secondary | Composer 2.5 Standard / Kimi K2.7 | Redundancy, comparison, overflow |
@@ -399,7 +396,7 @@ Side states:
 - **Needs Input** — agent uncertain, asks human a specific question
 - **Failed** — max attempts exhausted, needs human intervention
 - **Rolled Back** — deployed but health check failed, auto-reverted
-- **Paused** — human paused execution (via Telegram command or Linear)
+- **Paused** — human paused execution (via Linear)
 
 ---
 
@@ -438,7 +435,6 @@ Max daily total spend:               $50 (hard stop)
 - Prefers cheapest model (Qwen 3.8 at lowest rate)
 - Deploys low-risk (direct-prod policy) tickets automatically
 - Queues high-risk (manual-prod) tickets for morning approval
-- Sends Telegram summary at 07:00
 
 ---
 
@@ -483,7 +479,6 @@ Tickets labeled with these require human approval before production deploy:
 - Per-ticket hard cap (default $10)
 - Per-day global hard cap (default $50)
 - Worker killed immediately if budget exceeded
-- Telegram alert at 80% of daily budget
 
 ---
 
@@ -496,18 +491,6 @@ Tickets labeled with these require human approval before production deploy:
 - API: GraphQL client for posting comments, updating state, reading issue details
 - Agent sessions: link external run URL to Linear issue
 - States mapped: Linear custom states -> Nightforge lifecycle
-
-### Telegram
-
-- Bot notifications: ticket started, completed, failed, needs input, rolled back
-- Morning digest at 07:00: summary of overnight work
-- Commands from human:
-  - `/status` — current running agents
-  - `/pause {project}` — pause all work on a project
-  - `/resume {project}` — resume
-  - `/approve {ticket-id}` — approve production deploy
-  - `/cancel {ticket-id}` — kill running agent
-  - `/budget` — today's spend
 
 ### Health Checks
 

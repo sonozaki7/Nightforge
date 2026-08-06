@@ -1,0 +1,8 @@
+[Unit]
+Description=Nightforge release watchdog (activates/revives self-releases)
+After=network.target
+
+[Service]
+Type=oneshot
+Environment=NIGHTFORGE_RUNTIME_ROOT=/opt/nightforge/projects
+ExecStart=/opt/nightforge/watchdog/release-watchdog.sh

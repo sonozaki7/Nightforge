@@ -33,11 +33,40 @@ You implement tickets end-to-end: read requirements, write code, run tests, and 
 - File names: kebab-case. Classes: PascalCase. Functions: camelCase.
 
 ## Output Format
-Respond with a structured implementation:
-1. Analysis of what needs to change
-2. File-by-file changes (full file content for new files, diffs for modifications)
-3. Test updates if behavior changed
-4. Verification checklist`;
+Express every file change as a fenced block. There are exactly two block types:
+
+1. MODIFY an existing file — use an edit block:
+
+\`\`\`edit:path/relative/to/repo
+<<<<<<< SEARCH
+<exact existing lines that must change>
+=======
+<the new version of exactly those lines>
+>>>>>>> REPLACE
+\`\`\`
+
+- Copy the SEARCH lines VERBATIM from the Current File Contents shown in the ticket (same indentation, same wording).
+- Keep SEARCH minimal: only the lines that change, plus at most 1-2 context lines so the block is unique.
+- REPLACE holds only the new version of those same lines. Everything outside the block stays untouched.
+- One SEARCH/REPLACE hunk per edit block; multiple edit blocks per file are allowed.
+- NEVER output the full content of an existing file.
+
+2. CREATE a new file — use a file block with its full content:
+
+\`\`\`file:path/relative/to/repo
+<full content of the new file>
+\`\`\`
+
+3. DELETE a file — use a delete block:
+
+\`\`\`delete:path/relative/to/repo
+\`\`\`
+
+- Also remove every reference to a deleted file from the files that import or mention it (via edit blocks).
+
+- One block per new file; include only files that actually change.
+- Use paths relative to the repository root; never absolute paths.
+- After the blocks, add a one-paragraph summary and verification checklist.`;
 
 export interface PromptLayers {
   /** Cacheable system prompt blocks (Layers 1-3) */
@@ -47,7 +76,12 @@ export interface PromptLayers {
 }
 
 export interface PromptBuilder {
-  build(job: TicketJob, config: ProjectConfig, context: ProjectContext): PromptLayers;
+  build(
+    job: TicketJob,
+    config: ProjectConfig,
+    context: ProjectContext,
+    repoContext?: string
+  ): PromptLayers;
 }
 
 export function createPromptBuilder(): PromptBuilder {
@@ -55,7 +89,8 @@ export function createPromptBuilder(): PromptBuilder {
     build(
       job: TicketJob,
       config: ProjectConfig,
-      context: ProjectContext
+      context: ProjectContext,
+      repoContext?: string
     ): PromptLayers {
       const systemBlocks: SystemPromptBlock[] = [];
 
@@ -81,7 +116,7 @@ export function createPromptBuilder(): PromptBuilder {
       });
 
       // Layer 4: Dynamic ticket content (unique per request)
-      const userPrompt = buildTicketLayer(job);
+      const userPrompt = buildTicketLayer(job, repoContext);
 
       return { systemBlocks, userPrompt };
     },
@@ -143,7 +178,7 @@ function buildConfigLayer(config: ProjectConfig): string {
 - Deployment policy: ${config.deployment.policy}`;
 }
 
-function buildTicketLayer(job: TicketJob): string {
+function buildTicketLayer(job: TicketJob, repoContext?: string): string {
   const parts: string[] = [
     `## Ticket: ${job.title}`,
     "",
@@ -153,10 +188,17 @@ function buildTicketLayer(job: TicketJob): string {
     "### Description",
     job.description,
     "",
+  ];
+
+  if (repoContext !== undefined && repoContext.length > 0) {
+    parts.push("### Repository", repoContext, "");
+  }
+
+  parts.push(
     "### Instructions",
     "Implement the required changes following the project standards above.",
     "Ensure all validation commands pass before considering the work complete.",
-  ];
+  );
 
   return parts.join("\n");
 }

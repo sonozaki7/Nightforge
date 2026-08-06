@@ -8,11 +8,12 @@ Wants=redis.service
 Type=simple
 User=nightforge
 Group=nightforge
-WorkingDirectory=/opt/nightforge
+WorkingDirectory=/opt/nightforge/projects/current
 ExecStart=/usr/bin/node dist/main.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
+Environment=NIGHTFORGE_RUNTIME_ROOT=/opt/nightforge/projects
 EnvironmentFile=/opt/nightforge/.env
 
 # Security hardening

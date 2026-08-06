@@ -6,8 +6,6 @@ describe("loadConfig", () => {
     REDIS_URL: "redis://localhost:6379",
     LINEAR_API_KEY: "lin_test_key",
     LINEAR_WEBHOOK_SECRET: "webhook_secret",
-    TELEGRAM_BOT_TOKEN: "bot_token",
-    TELEGRAM_CHAT_ID: "chat_123",
     DASHSCOPE_API_KEY: "dash_key",
     ANTHROPIC_API_KEY: "anth_key",
     OPENROUTER_API_KEY: "or_key",
@@ -26,8 +24,6 @@ describe("loadConfig", () => {
     expect(config.redis.url).toBe("redis://localhost:6379");
     expect(config.linear.apiKey).toBe("lin_test_key");
     expect(config.linear.webhookSecret).toBe("webhook_secret");
-    expect(config.telegram.botToken).toBe("bot_token");
-    expect(config.telegram.chatId).toBe("chat_123");
     expect(config.providers.dashscope.apiKey).toBe("dash_key");
     expect(config.providers.anthropic.apiKey).toBe("anth_key");
     expect(config.limits.maxConcurrentWorkers).toBe(6);
@@ -40,8 +36,6 @@ describe("loadConfig", () => {
     const minimalEnv = {
       LINEAR_API_KEY: "lin_test_key",
       LINEAR_WEBHOOK_SECRET: "webhook_secret",
-      TELEGRAM_BOT_TOKEN: "bot_token",
-      TELEGRAM_CHAT_ID: "chat_123",
       DASHSCOPE_API_KEY: "dash_key",
       ANTHROPIC_API_KEY: "anth_key",
       OPENROUTER_API_KEY: "or_key",

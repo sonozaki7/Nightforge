@@ -4,6 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { createServer } from "../src/server.js";
 import type { LinearClient } from "../src/integrations/linear.js";
 import type { Scheduler } from "../src/queue/scheduler.js";
+import type { EpicDispatch } from "../src/epic/epic-dispatch.js";
+import type { ApprovalStore, ApprovalRecord } from "../src/queue/approvals.js";
 
 /* eslint-disable @typescript-eslint/unbound-method */
 
@@ -14,26 +16,37 @@ describe("Linear webhook integration", () => {
   const mockLinearClient: LinearClient = {
     verifyWebhookSignature: vi.fn(),
     getIssue: vi.fn(),
+    getChildIssues: vi.fn(),
     postComment: vi.fn(),
     updateIssueState: vi.fn(),
   };
 
   const mockScheduler: Scheduler = {
     enqueue: vi.fn(),
+    enqueueAndWait: vi.fn(),
     getQueueStats: vi.fn(),
     close: vi.fn(),
+  };
+
+  const mockApprovalStore: ApprovalStore = {
+    save: vi.fn(),
+    get: vi.fn(),
+    remove: vi.fn(),
+    list: vi.fn(),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  const createTestServer = (): FastifyInstance =>
+  const createTestServer = (epicDispatch?: EpicDispatch): FastifyInstance =>
     createServer({
       linearClient: mockLinearClient,
       scheduler: mockScheduler,
       webhookSecret,
       projectId,
+      approvalStore: mockApprovalStore,
+      epicDispatch,
     });
 
   const validPayload = {
@@ -87,7 +100,7 @@ describe("Linear webhook integration", () => {
       method: "POST",
       url: "/webhooks/linear",
       headers: { "linear-signature": "valid" },
-      payload: { ...validPayload, type: "Comment" },
+      payload: { ...validPayload, type: "IssueLabel" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -148,6 +161,43 @@ describe("Linear webhook integration", () => {
     );
   });
 
+  it("should route epic-labeled issues through the epic dispatch", async () => {
+    vi.mocked(mockLinearClient.verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(mockLinearClient.postComment).mockResolvedValue(undefined);
+
+    const mockEpicDispatch: EpicDispatch = {
+      isEpic: vi.fn().mockReturnValue(true),
+      handle: vi.fn().mockResolvedValue({
+        epicId: "issue-123",
+        atomic: false,
+        atomizerReason: "Decomposed into 2 tasks with exclusive ownership",
+        epic: { message: "All 2 tasks completed" },
+        state: "accepted",
+      }),
+    };
+
+    const server = createTestServer(mockEpicDispatch);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid-signature" },
+      payload: {
+        ...validPayload,
+        data: { ...validPayload.data, labels: [{ name: "epic" }] },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ message: "Epic accepted" });
+    expect(mockEpicDispatch.handle).toHaveBeenCalled();
+    expect(mockScheduler.enqueue).not.toHaveBeenCalled();
+    expect(mockLinearClient.postComment).toHaveBeenCalledWith(
+      "issue-123",
+      expect.stringContaining("Epic accepted")
+    );
+  });
+
   it("should return health status", async () => {
     const server = createTestServer();
 
@@ -159,6 +209,161 @@ describe("Linear webhook integration", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toHaveProperty("status", "ok");
     expect(response.json()).toHaveProperty("uptime");
+  });
+});
+
+describe("Linear comment approval", () => {
+  const webhookSecret = "test-secret";
+  const projectId = "test-project";
+
+  const mockLinearClient: LinearClient = {
+    verifyWebhookSignature: vi.fn().mockReturnValue(true),
+    getIssue: vi.fn(),
+    getChildIssues: vi.fn(),
+    postComment: vi.fn().mockResolvedValue(undefined),
+    updateIssueState: vi.fn(),
+  };
+
+  const mockScheduler: Scheduler = {
+    enqueue: vi.fn().mockResolvedValue("job-1"),
+    enqueueAndWait: vi.fn(),
+    getQueueStats: vi.fn(),
+    close: vi.fn(),
+  };
+
+  const pendingRecord = {
+    job: { ticketId: "issue-123", projectId, title: "Test", description: "", labels: [], priority: 5, attempt: 1 },
+    contract: {},
+    worktreePath: "/tmp/worktree",
+    summary: "implemented",
+    riskReason: "high-risk classes detected",
+    createdAt: 1,
+    expiresAt: Date.now() + 3600_000,
+  } as unknown as ApprovalRecord;
+
+  const mockApprovalStore: ApprovalStore = {
+    save: vi.fn(),
+    get: vi.fn(),
+    remove: vi.fn(),
+    list: vi.fn(),
+  };
+
+  const commentPayload = {
+    action: "create",
+    type: "Comment",
+    data: { id: "comment-1", body: "/approve", issueId: "issue-123" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(mockLinearClient.verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(mockLinearClient.postComment).mockResolvedValue(undefined);
+    vi.mocked(mockScheduler.enqueue).mockResolvedValue("job-1");
+  });
+
+  const createServer_ = (): FastifyInstance =>
+    createServer({
+      linearClient: mockLinearClient,
+      scheduler: mockScheduler,
+      webhookSecret,
+      projectId,
+      approvalStore: mockApprovalStore,
+    });
+
+  it("should enqueue a release job when a comment approves a pending ticket", async () => {
+    vi.mocked(mockApprovalStore.get).mockResolvedValue(pendingRecord);
+
+    const server = createServer_();
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: commentPayload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ message: "Approval queued" });
+    expect(mockApprovalStore.get).toHaveBeenCalledWith("issue-123");
+    expect(mockScheduler.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: "issue-123",
+        approvalGranted: true,
+      })
+    );
+    expect(mockLinearClient.postComment).toHaveBeenCalledWith(
+      "issue-123",
+      expect.stringContaining("Approval received")
+    );
+  });
+
+  it("should ignore comments without the approve trigger", async () => {
+    const server = createServer_();
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: {
+        ...commentPayload,
+        data: { ...commentPayload.data, body: "Looks good to me" },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      message: "Ignored (no approval trigger)",
+    });
+    expect(mockScheduler.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("should ignore approvals when no ticket is pending", async () => {
+    vi.mocked(mockApprovalStore.get).mockResolvedValue(null);
+
+    const server = createServer_();
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: commentPayload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      message: "No pending approval for ticket",
+    });
+    expect(mockScheduler.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("should honor an explicit ticket id in the approve comment", async () => {
+    vi.mocked(mockApprovalStore.get).mockResolvedValue(pendingRecord);
+
+    const server = createServer_();
+    await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: {
+        ...commentPayload,
+        data: { ...commentPayload.data, body: "/approve other-ticket" },
+      },
+    });
+
+    expect(mockApprovalStore.get).toHaveBeenCalledWith("other-ticket");
+  });
+
+  it("should ignore comment update events", async () => {
+    vi.mocked(mockApprovalStore.get).mockResolvedValue(pendingRecord);
+
+    const server = createServer_();
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: { ...commentPayload, action: "update" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ message: "Ignored" });
+    expect(mockScheduler.enqueue).not.toHaveBeenCalled();
   });
 });
 
@@ -196,5 +401,20 @@ describe("Linear signature verification", () => {
       secret
     );
     expect(result).toBe(false);
+  });
+
+  it("should reject malformed signatures without throwing", async () => {
+    const { createLinearClient } = await import(
+      "../src/integrations/linear.js"
+    );
+    const client = createLinearClient("test-key");
+
+    const payload = '{"test": "data"}';
+    const secret = "my-secret";
+
+    for (const malformed of ["", "short", "base64-not-hex=="]) {
+      const result = client.verifyWebhookSignature(payload, malformed, secret);
+      expect(result).toBe(false);
+    }
   });
 });

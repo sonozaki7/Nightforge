@@ -6,6 +6,7 @@ import {
   type ProviderConfig,
   type SystemPromptBlock,
 } from "./base.js";
+import { withRetry } from "./retry.js";
 
 const logger = pino({ name: "nightforge-claude" });
 
@@ -87,21 +88,27 @@ export function createClaudeProvider(config: ProviderConfig): Provider {
         body.temperature = options.temperature;
       }
 
-      const response = await fetch(ANTHROPIC_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": config.apiKey,
-          "anthropic-version": ANTHROPIC_VERSION,
-        },
-        body: JSON.stringify(body),
-      });
+      const response = await withRetry(
+        () =>
+          fetch(ANTHROPIC_API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": config.apiKey,
+              "anthropic-version": ANTHROPIC_VERSION,
+            },
+            body: JSON.stringify(body),
+          }),
+        { maxAttempts: 4, baseDelayMs: 1000 }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(
+        const error = new Error(
           `Claude API error ${String(response.status)}: ${errorText}`
-        );
+        ) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
       }
 
       const data = (await response.json()) as AnthropicResponse;

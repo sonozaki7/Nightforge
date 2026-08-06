@@ -1,4 +1,7 @@
+> Built by Nightforge — this repo is maintained by the Nightforge agent pipeline.
+
 # Nightforge
+> Nightforge v2.1 — self-hosting verification release
 
 **The forge that burns while you sleep.**
 
@@ -11,7 +14,7 @@ You manage priorities on a Linear Kanban board. AI agents implement, test, deplo
 - Move tickets to "Ready for AI" → agents pick them up
 - Routes each ticket to the cheapest capable model (Qwen 3.8 for routine, Claude for complex)
 - Tests, builds, deploys atomically, verifies, rolls back on failure
-- Reports results via Telegram and Linear comments
+- Reports results to Linear comments
 - Manages multiple projects simultaneously from one control layer
 
 ## Quick Start
@@ -21,15 +24,17 @@ You manage priorities on a Linear Kanban board. AI agents implement, test, deplo
 git clone https://github.com/sonozaki7/Nightforge.git
 cd Nightforge
 
-# Configure
-cp .env.example .env
-# Edit .env with your API keys
+# Configure (interactive wizard)
+npm install
+npm run setup
+
+# Verify the installation
+npm run diagnostics
 
 # Run with Docker
 docker compose up -d
 
 # Or run locally
-npm install
 npm run dev
 ```
 
@@ -42,10 +47,9 @@ All configuration via environment variables (see `.env.example`):
 | `REDIS_URL` | Redis connection string |
 | `LINEAR_API_KEY` | Linear GraphQL API key |
 | `LINEAR_WEBHOOK_SECRET` | Webhook HMAC secret |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
-| `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
 | `DASHSCOPE_API_KEY` | Qwen/DashScope API key |
 | `ANTHROPIC_API_KEY` | Claude API key |
+| `OPENROUTER_API_KEY` | OpenRouter key (routes families without a native backend) |
 | `PROJECTS_DIR` | Directory containing managed projects |
 | `WORKTREES_DIR` | Git worktree isolation directory |
 | `MAX_CONCURRENT_WORKERS` | Max parallel agents (default: 6) |
@@ -53,31 +57,23 @@ All configuration via environment variables (see `.env.example`):
 
 ## Model Routing
 
-Cost-optimized routing (cheapest first):
+Tiered hierarchy — each agent role routes to the cheapest capable model (see [docs/PROVIDER-SDK.md](./docs/PROVIDER-SDK.md)):
 
-| Provider | Model | Use For |
-|----------|-------|---------|
-| DashScope | Qwen 3.8 | Overnight bulk, routine CRUD/UI/tests |
-| Moonshot | Kimi K3 | Secondary coding lane |
-| Anthropic | Claude Opus 5 | Architecture, security, hard problems |
+| Tier | Purpose | Examples |
+|------|---------|----------|
+| Principal | Rare high-stakes decisions, arbitration | GPT-5.6 Sol, Claude Opus 5 |
+| Senior | Engineering judgment: planning, triage, integration | Qwen 3.8 Max, Kimi K3 |
+| Leaf | Bulk implementation, exploration, curation | DeepSeek V4 Flash, Qwen 3.7 Plus |
 
 Routing rules:
-1. Labels `architecture`/`security`/`billing` → Claude
-2. Label `urgent` → Claude
-3. Failed 2x on current model → escalate
-4. Overnight (21:00-07:00) → Qwen (cheapest)
-5. Default → Qwen
 
-## Telegram Commands
+1. Role defines the base tier (implementer → leaf, planner → senior).
+2. Reviewer tier follows blast radius (low → leaf … critical → principal).
+3. Failed 2x on a task → escalate one tier.
+4. Reviews avoid the author's model family.
+5. Adaptive learning adjusts within policy eligibility — never overrides it.
 
-Control from anywhere (iPhone, MacBook):
-
-- `/status` — running agents
-- `/pause {project}` — pause work
-- `/resume {project}` — resume
-- `/approve {ticket-id}` — approve production deploy
-- `/cancel {ticket-id}` — kill running agent
-- `/budget` — today's spend
+Deterministic regression check: `npm run bench` (11 pinned routing cases).
 
 ## Architecture
 
@@ -105,13 +101,29 @@ deployment:
   deployCommand: ./ops/deploy.sh
 ```
 
+## Approvals
+
+High-risk tickets (billing, auth, migration, …) are held before production by
+[the release gate](src/queue/ticket-workflow.ts). Nightforge posts an
+`⏸ Awaiting one approval` comment on the Linear ticket; the implementation
+worktree is kept alive for 24h. Reply with `/approve` on the ticket and the
+release stage re-runs from the same worktree with the approval granted.
+
+- `/approve` on the ticket — approve the ticket the comment is on
+- `/approve TKT-123` — approve a specific ticket
+
 ## Development
 
 ```bash
 npm run lint        # ESLint
 npm run typecheck   # TypeScript strict
 npm test            # Vitest
+npm run bench       # deterministic routing benchmark
+npm run setup       # setup wizard (.env)
+npm run diagnostics # installation health check
 ```
+
+Documentation index: [docs/README.md](./docs/README.md). Security policy: [SECURITY.md](./SECURITY.md).
 
 ## License
 

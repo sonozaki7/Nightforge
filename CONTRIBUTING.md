@@ -49,3 +49,7 @@ npm test
 ```
 
 All three must pass before submitting a PR.
+
+## Quality Gates
+
+All changes must pass the quality gates defined in `AGENTS.md` (`npm run lint`, `npm run typecheck`, `npm test`) before they are accepted.

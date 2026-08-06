@@ -56,7 +56,17 @@ export function createDeployer(): Deployer {
         await mkdir(releasePath, { recursive: true });
         log.info({ releasePath }, "Release directory created");
 
-        await cp(sourcePath, releasePath, { recursive: true });
+        await cp(sourcePath, releasePath, {
+          recursive: true,
+          // Never carry node_modules or .git into a release. Worktree
+          // node_modules is a symlink into the origin repo; copying it
+          // would let the release's install step wipe the origin's
+          // dependencies. prepare-release installs fresh deps instead.
+          filter: (src: string): boolean => {
+            const base = path.basename(src);
+            return base !== "node_modules" && base !== ".git";
+          },
+        });
         log.info("Artifacts copied to release");
 
         const [cmd = "", ...args] = projectConfig.deployment.deployCommand.split(" ");
