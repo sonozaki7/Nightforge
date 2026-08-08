@@ -468,7 +468,7 @@ export function createLinearClient(apiKey: string): LinearClient {
       resourceTypes: string[];
     }): Promise<void> {
       const mutation = `
-        mutation WebhookUpdate($id: String!, $resourceTypes: [WebhookResourceType!]!) {
+        mutation WebhookUpdate($id: String!, $resourceTypes: [String!]!) {
           webhookUpdate(id: $id, input: { resourceTypes: $resourceTypes }) {
             success
           }
