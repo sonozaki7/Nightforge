@@ -43,6 +43,10 @@ describe("parseControlCommand", () => {
     expect(parseControlCommand("project list").kind).toBe("list");
   });
 
+  it("parses discover commands", () => {
+    expect(parseControlCommand("project discover").kind).toBe("discover");
+  });
+
   it("parses status commands", () => {
     const cmd = parseControlCommand("project status my-app");
     expect(cmd.kind).toBe("status");
@@ -80,13 +84,14 @@ describe("createProjectControl", () => {
     vi.clearAllMocks();
   });
 
-  function makeControl(): ReturnType<typeof createProjectControl> {
+  function makeControl(githubToken?: string): ReturnType<typeof createProjectControl> {
     const deps: ControlDeps = {
       linearClient: linear,
       projectsDir: dir,
       publicBaseUrl: "https://getnightforge.com",
       webhookSecret: "secret",
       defaultProjectId: "nightforge",
+      githubToken,
     };
     return createProjectControl(deps);
   }
@@ -136,6 +141,48 @@ deployment:
     const reply = await control.run({ kind: "list" });
     expect(reply).toContain("alpha");
     expect(reply).not.toContain("releases");
+  });
+
+  it("discover reports GitHub listing is disabled without a token", async () => {
+    const control = makeControl();
+    const reply = await control.run({ kind: "discover" });
+    expect(reply).toContain("GITHUB_TOKEN");
+  });
+
+  it("discover lists GitHub repos and flags registered ones", async () => {
+    makeRepo("alpha");
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([
+          {
+            full_name: "owner/alpha",
+            html_url: "https://github.com/owner/alpha",
+          },
+          {
+            full_name: "owner/beta",
+            html_url: "https://github.com/owner/beta",
+          },
+        ] as Array<{ full_name: string; html_url: string }>),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const control = makeControl("my-token");
+      const reply = await control.run({ kind: "discover" });
+      expect(reply).toContain("owner/alpha ✅");
+      expect(reply).toContain("owner/beta");
+      expect(reply).not.toContain("owner/beta ✅");
+      const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [
+        string,
+        { headers: { Authorization: string } },
+      ];
+      expect(calledUrl).toBe("https://api.github.com/user/repos?per_page=100");
+      expect(calledInit.headers.Authorization).toBe("Bearer my-token");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("removes a project folder", async () => {

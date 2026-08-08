@@ -5,7 +5,7 @@ import path from "node:path";
 import { parse, stringify } from "yaml";
 import pino from "pino";
 import type { LinearClient, LinearTeam } from "../integrations/linear.js";
-import { addProject, parseRepoUrl } from "../cli/project-add.js";
+import { addProject, parseRepoUrl, slugify } from "../cli/project-add.js";
 import { loadProjectConfig } from "./project-loader.js";
 import { parseProjectConfig } from "./registry.js";
 
@@ -16,6 +16,7 @@ export type ControlCommand =
   | { kind: "add"; repoUrl: string; teamName: string }
   | { kind: "remove"; projectId: string }
   | { kind: "list" }
+  | { kind: "discover" }
   | { kind: "status"; projectId: string }
   | {
       kind: "link";
@@ -34,6 +35,11 @@ export interface ControlDeps {
   webhookSecret: string;
   /** Default project id used when a ticket has no team mapping. */
   defaultProjectId: string;
+  /**
+   * GitHub token used to list repos on the account. When unset, the
+   * `discover` command reports that GitHub listing is unavailable.
+   */
+  githubToken?: string;
 }
 
 export interface ProjectControl {
@@ -69,6 +75,10 @@ export function parseControlCommand(text: string): ControlCommand {
     return { kind: "list" };
   }
 
+  if (/^(?:project\s+)?discover\s*$/i.test(t)) {
+    return { kind: "discover" };
+  }
+
   const statusMatch = t.match(
     /^(?:project\s+)?status\s+([a-z0-9-]+)/i
   );
@@ -93,7 +103,7 @@ export function parseControlCommand(text: string): ControlCommand {
   }
 
   // Command-like but unrecognized → treat as help so the user learns formats.
-  if (/^(?:project\s+)?(add|remove|delete|link|status|list)/i.test(t)) {
+  if (/^(?:project\s+)?(add|remove|delete|link|status|list|discover)/i.test(t)) {
     return { kind: "help" };
   }
 
@@ -107,6 +117,7 @@ project add <repo-url>
 
 project remove <project-id>
 project list
+project discover
 project status <project-id>
 project link <source>:<path> -> <target>
   e.g. project link taviaverify:src/lib.ts -> nightforge
@@ -271,6 +282,47 @@ export function createProjectControl(deps: ControlDeps): ProjectControl {
 It lives at \`.nightforge/references/${command.sourceProject}/${command.filePath}\` so agents can import it without accessing the other project's folder.`;
   };
 
+  const cmdDiscover = async (): Promise<string> => {
+    const token = deps.githubToken ?? "";
+    if (token === "") {
+      return "❌ GitHub listing is not enabled. Ask the owner to set GITHUB_TOKEN.";
+    }
+
+    const response = await fetch("https://api.github.com/user/repos?per_page=100", {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      logger.warn(
+        { status: response.status },
+        "GitHub repo listing failed"
+      );
+      return `❌ Could not list GitHub repos (HTTP ${String(response.status)}). Check that GITHUB_TOKEN has repo read access.`;
+    }
+
+    const repos = (await response.json()) as Array<{
+      full_name?: string;
+      html_url?: string;
+    }>;
+    const registered = new Set(listProjectIds());
+    const entries = repos
+      .map((repo) => {
+        const name = (repo.full_name ?? "").split("/").pop() ?? "";
+        const isAdded = name !== "" && registered.has(slugify(name));
+        return `- ${repo.full_name ?? "unknown"}${isAdded ? " ✅ added" : ""}`;
+      })
+      .sort();
+
+    if (entries.length === 0) {
+      return "No GitHub repos found on this account.";
+    }
+
+    return `GitHub repos on this account:\n\n${entries.join("\n")}\n\n_Add one with \`project add <repo-url>\`._`;
+  };
+
   return {
     async run(command: ControlCommand): Promise<string> {
       try {
@@ -281,6 +333,8 @@ It lives at \`.nightforge/references/${command.sourceProject}/${command.filePath
             return await cmdRemove(command.projectId);
           case "list":
             return cmdList();
+          case "discover":
+            return await cmdDiscover();
           case "status":
             return cmdStatus(command.projectId);
           case "link":

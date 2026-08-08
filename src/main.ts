@@ -395,6 +395,7 @@ async function main(): Promise<void> {
       publicBaseUrl: config.control.publicBaseUrl,
       webhookSecret: config.linear.webhookSecret,
       defaultProjectId: config.projectId,
+      githubToken: config.github.token || undefined,
     }),
     controlTeam: config.control.team,
     approvalStore,
