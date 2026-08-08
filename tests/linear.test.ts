@@ -26,6 +26,7 @@ describe("Linear webhook integration", () => {
     listWebhooks: vi.fn(),
     updateWebhook: vi.fn(),
     createIssue: vi.fn(),
+    archiveIssue: vi.fn(),
     listTeamIssues: vi.fn(),
     listTeamStates: vi.fn(),
   };
@@ -361,6 +362,7 @@ describe("Linear comment approval", () => {
     postComment: vi.fn().mockResolvedValue(undefined),
     updateIssueState: vi.fn(),
     createIssue: vi.fn(),
+    archiveIssue: vi.fn(),
     listTeamIssues: vi.fn(),
     listTeamStates: vi.fn(),
     listWebhooks: vi.fn(),

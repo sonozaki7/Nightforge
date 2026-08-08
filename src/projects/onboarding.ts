@@ -3,224 +3,66 @@ import type { LinearClient } from "../integrations/linear.js";
 
 const logger = pino({ name: "nightforge-onboarding" });
 
-/** Pre-existing tutorial issues seeded into the Nightforge Control team. */
+/** The single console ticket seeded into the Nightforge Control team. */
 export const CONTROL_TUTORIAL_ISSUES: Array<{
   title: string;
   description: string;
 }> = [
   {
     title: "🏠 Nightforge Home — run commands here",
-    description: `## You don't need to create new tickets anymore
+    description: `## You don't need to create tickets — this is Nightforge's chat console
 
-This ticket is your Nightforge "chat console". To tell Nightforge what to do, just type a command in the comments below and press enter. Nightforge replies right here in the thread.
+This single ticket is how you talk to Nightforge. Type a command in the comments below and press enter — Nightforge replies right here in the thread.
 
-## Try it right now
+## What is Nightforge?
 
-Type \`help\` in the comments below and Nightforge will reply with everything it can do.
+Nightforge is your AI teammate. It reads your commands, does the work, and replies on the ticket. It manages your projects: adding a GitHub repo, listing your projects, showing every repo on your GitHub account, checking status, and more.
 
-## Examples you can type as comments
+## What is this team for?
 
-- \`project list\` — show your projects
-- \`project discover\` — show all your GitHub repos
-- \`browser-use\` — add a repo by its name
-- \`https://github.com/sonozaki7/browser-use\` — add a repo by pasting its URL
-- \`project status my-app\` — check a project's status
-- \`project remove my-app\` — remove a project (your GitHub repo stays safe)
-
-## The old way still works
-
-You can still create a new ticket with a command title and move it to Ready for AI — that always works too. But the comment way is faster.`,
-  },
-  {
-    title: "👋 Welcome to Nightforge — start here",
-    description: `## What is Nightforge?
-
-Nightforge is your AI teammate. When you create a ticket here and move it to **Ready for AI**, Nightforge reads it, does the work, and replies on the ticket when it's done.
-
-## What is THIS team for?
-
-This is the **Nightforge Control** team — the control panel for Nightforge itself. Tickets in this team are *commands* that manage projects (add one, see your projects, check status, remove). They are **not** coding jobs.
+This is the **Nightforge Control** team — Nightforge's own control panel. Normally you only ever use this one ticket here. This team can't be deleted because it literally runs Nightforge.
 
 ## The golden rule
 
-1. Create a new issue in this team.
-2. Set the title to a command.
-3. Move it to **Ready for AI**.
-4. Wait for the ⚙️ reply on the ticket.
+1. Open this ticket (Nightforge Home).
+2. Type a command in the comments.
+3. Wait for the ⚙️ reply.
 
-## Try this
+## Every command
 
-Give any of these tutorial tickets a try — each one teaches a command:
+| What you want | What to type in the comments |
+|---|---|
+| See your projects | \`project list\` |
+| See all your GitHub repos | \`project discover\` |
+| Add a repo by its name | \`browser-use\` (just the repo name) |
+| Add a repo by pasting its URL | paste \`https://github.com/owner/name\` |
+| Add a repo the explicit way | \`project add https://github.com/owner/name\` |
+| Check a project's status | \`project status project-name\` |
+| Remove a project | \`project remove project-name\` |
+| Get help | \`help\` |
 
-- 📚 Tutorial: Add a project (3 easy ways)
-- 📚 Tutorial: See your projects
-- 📚 Tutorial: See your GitHub repos
-- 📚 Tutorial: Remove a project
-- 📚 Tutorial: Check a project's status
-- 📚 Tutorial: Get help
+## Try it right now
 
-> This team runs Nightforge itself, so it can't be deleted. That's by design — it's the safe, permanent home for managing your projects.
+Type \`help\` in the comments below — Nightforge will reply with everything it can do.
 
----
+## The old way still works
 
-1. Create a new issue in this team.
-2. Set the title to: \`help\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
-  },
-  {
-    title: "📚 Tutorial: Add a project (3 easy ways)",
-    description: `## What is a "project"?
-
-A project is a GitHub repository that Nightforge works on. Think of it as Nightforge's desk — the code it reads, edits, and ships for you.
-
-## Three easy ways to add one
-
-Create a ticket in this team and set its title to any of these:
-
-1. Paste the repo URL, e.g. \`https://github.com/sonozaki7/browser-use\`
-2. Just the repo name, e.g. \`browser-use\`
-3. Owner/name, e.g. \`sonozaki7/browser-use\`
-
-Private repos work too — Nightforge uses your GitHub connection, so your private code stays safe.
-
-## The always-works way
-
-If a shortcut ever seems to misbehave, use the explicit form — it always works:
-
-\`project add https://github.com/sonozaki7/browser-use\`
-
-## What happens next
-
-After you move the ticket to **Ready for AI**, Nightforge will:
-
-1. Clone the repo into its workspace
-2. Create a matching Linear team for it
-3. Wire the team's webhook so tickets there reach Nightforge
-
-Then it replies on your ticket with the details.
-
----
-
-1. Create a new issue in this team.
-2. Set the title to: \`project add https://github.com/sonozaki7/browser-use\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
-  },
-  {
-    title: "📚 Tutorial: See your projects",
-    description: `## What does this do?
-
-\`project list\` shows every project Nightforge already has in its workspace.
-
-Create a ticket with the title \`project list\` and move it to **Ready for AI**. Nightforge replies with something like:
-
-\`\`\`
-Registered projects:
-
-- my-app
-- browser-use
-\`\`\`
-
-If nothing is registered yet, it will tell you how to add your first one.
-
----
-
-1. Create a new issue in this team.
-2. Set the title to: \`project list\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
-  },
-  {
-    title: "📚 Tutorial: See your GitHub repos",
-    description: `## What does this do?
-
-\`project discover\` lists every repo on your connected GitHub account, and marks the ones Nightforge has already added with a ✅.
-
-Create a ticket with the title \`project discover\` and move it to **Ready for AI**. Nightforge replies with your list, e.g.:
-
-\`\`\`
-GitHub repos on this account:
-
-- sonozaki7/browser-use ✅ added
-- sonozaki7/another-project
-\`\`\`
-
-## Add one from the list
-
-Create a new ticket with just the repo's name or URL and Nightforge will add it.
-
----
-
-1. Create a new issue in this team.
-2. Set the title to: \`project discover\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
-  },
-  {
-    title: "📚 Tutorial: Remove a project",
-    description: `## What does this do?
-
-\`project remove <name>\` removes a project from Nightforge's workspace.
-
-⚠️ Important: this only deletes Nightforge's working copy of the code. Your GitHub repo is **untouched and safe** — your code stays on GitHub exactly as it was.
-
-Create a ticket with the title \`project remove my-app\` (use the real project name — see \`project list\`) and move it to **Ready for AI**.
-
-You can add the project back at any time.
-
----
-
-1. Create a new issue in this team.
-2. Set the title to: \`project remove my-app\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
-  },
-  {
-    title: "📚 Tutorial: Check a project's status",
-    description: `## What does this do?
-
-\`project status <name>\` shows a snapshot of a project: where its code lives, its deployment policy, how many releases are on disk, and which AI model it uses by default.
-
-Create a ticket with the title \`project status my-app\` (use the real project name — see \`project list\`) and move it to **Ready for AI**. Nightforge replies with a short status report.
-
----
-
-1. Create a new issue in this team.
-2. Set the title to: \`project status my-app\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
-  },
-  {
-    title: "📚 Tutorial: Get help",
-    description: `## What does this do?
-
-\`help\` makes Nightforge reply with the full command list, so you always know what you can do.
-
-Create a ticket with the title \`help\` and move it to **Ready for AI**.
-
-## Also check out the other tutorials in this team
-
-- 👋 Welcome to Nightforge — start here
-- 📚 Tutorial: Add a project (3 easy ways)
-- 📚 Tutorial: See your projects
-- 📚 Tutorial: See your GitHub repos
-- 📚 Tutorial: Remove a project
-- 📚 Tutorial: Check a project's status
-
----
-
-1. Create a new issue in this team.
-2. Set the title to: \`help\`
-3. Move it to Ready for AI.
-4. Wait for the ⚙️ reply.`,
+You can still create a brand-new ticket with a command title and move it to **Ready for AI** — that always works too. The comment way is just faster.`,
   },
 ];
 
+const HOME_TITLE = "🏠 Nightforge Home — run commands here";
+
+/** True when the issue title matches a legacy seeded tutorial ticket. */
+const isOldTutorial = (title: string): boolean =>
+  title.startsWith("📚 Tutorial:") ||
+  title === "👋 Welcome to Nightforge — start here";
+
 /**
- * Best-effort seeding of tutorial issues into the Nightforge Control team.
- * Never throws: any Linear failure is logged and returns 0 so startup is
- * never blocked. Skips issues whose title already exists (case-insensitive).
+ * Best-effort seeding of the single console ticket into the Nightforge
+ * Control team. Never throws: any Linear failure is logged and returns 0 so
+ * startup is never blocked. Creates the Home ticket when missing and archives
+ * legacy tutorial tickets that are no longer part of the list.
  */
 export async function seedControlOnboarding(
   linearClient: LinearClient,
@@ -245,6 +87,14 @@ export async function seedControlOnboarding(
     const existingTitles = new Set(
       existing.map((issue) => issue.title.toLowerCase())
     );
+
+    let archived = 0;
+    for (const issue of existing) {
+      if (issue.title !== HOME_TITLE && isOldTutorial(issue.title)) {
+        await linearClient.archiveIssue(issue.id);
+        archived += 1;
+      }
+    }
 
     const states = await linearClient.listTeamStates(match.id);
     const unstarted = states.filter((state) => state.type === "unstarted");
@@ -281,7 +131,7 @@ export async function seedControlOnboarding(
     }
 
     logger.info(
-      { teamId: match.id, created, skipped },
+      { teamId: match.id, created, skipped, archived },
       "Control onboarding seeded"
     );
     return created;

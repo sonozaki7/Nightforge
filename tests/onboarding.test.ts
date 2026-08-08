@@ -23,6 +23,7 @@ function mockLinearClient(overrides: Partial<LinearClient> = {}): LinearClient {
     listWebhooks: vi.fn().mockResolvedValue([]),
     updateWebhook: vi.fn(),
     createIssue: vi.fn().mockResolvedValue(undefined),
+    archiveIssue: vi.fn().mockResolvedValue(undefined),
     listTeamIssues: vi.fn().mockResolvedValue([]),
     listTeamStates: vi.fn().mockResolvedValue([
       { id: "state-todo", name: "Todo", type: "unstarted" },
@@ -32,7 +33,7 @@ function mockLinearClient(overrides: Partial<LinearClient> = {}): LinearClient {
 }
 
 describe("seedControlOnboarding", () => {
-  it("seeds all tutorial issues when the team has none", async () => {
+  it("seeds the single Home ticket when the team has none", async () => {
     const linear = mockLinearClient();
     const seeded = await seedControlOnboarding(linear, "team-1");
     expect(seeded).toBe(CONTROL_TUTORIAL_ISSUES.length);
@@ -50,22 +51,15 @@ describe("seedControlOnboarding", () => {
     expect(linear.listTeamStates).toHaveBeenCalledWith("team-1");
   });
 
-  it("skips issues whose titles already exist", async () => {
-    const existing = CONTROL_TUTORIAL_ISSUES.slice(0, 3);
+  it("skips the Home ticket when it already exists", async () => {
     const linear = mockLinearClient({
-      listTeamIssues: vi.fn().mockResolvedValue(
-        existing.map((tutorial) => ({ id: "existing", title: tutorial.title }))
-      ),
+      listTeamIssues: vi.fn().mockResolvedValue([
+        { id: "home-existing", title: CONTROL_TUTORIAL_ISSUES[0].title },
+      ]),
     });
     const seeded = await seedControlOnboarding(linear, "team-1");
-    const expected = CONTROL_TUTORIAL_ISSUES.length - existing.length;
-    expect(seeded).toBe(expected);
-    expect(linear.createIssue).toHaveBeenCalledTimes(expected);
-    for (const tutorial of CONTROL_TUTORIAL_ISSUES.slice(3)) {
-      expect(linear.createIssue).toHaveBeenCalledWith(
-        expect.objectContaining({ title: tutorial.title })
-      );
-    }
+    expect(seeded).toBe(0);
+    expect(linear.createIssue).not.toHaveBeenCalled();
   });
 
   it("resolves the team by name", async () => {
@@ -85,6 +79,7 @@ describe("seedControlOnboarding", () => {
     const seeded = await seedControlOnboarding(linear, "ghost-team");
     expect(seeded).toBe(0);
     expect(linear.createIssue).not.toHaveBeenCalled();
+    expect(linear.archiveIssue).not.toHaveBeenCalled();
   });
 
   it("seeds into the Todo state when it exists", async () => {
@@ -117,6 +112,53 @@ describe("seedControlOnboarding", () => {
     for (const call of vi.mocked(linear.createIssue).mock.calls) {
       expect(call[0]).not.toHaveProperty("stateId");
     }
+  });
+
+  it("archives legacy tutorial tickets when the Home ticket already exists", async () => {
+    const linear = mockLinearClient({
+      listTeamIssues: vi.fn().mockResolvedValue([
+        { id: "home-1", title: "🏠 Nightforge Home — run commands here" },
+        { id: "tut-1", title: "📚 Tutorial: Add a project (3 easy ways)" },
+        { id: "tut-2", title: "📚 Tutorial: See your projects" },
+        { id: "welcome-1", title: "👋 Welcome to Nightforge — start here" },
+        { id: "user-1", title: "project list" },
+        { id: "user-2", title: "project add https://github.com/owner/name" },
+      ]),
+    });
+    const seeded = await seedControlOnboarding(linear, "team-1");
+    expect(seeded).toBe(0);
+    expect(linear.createIssue).not.toHaveBeenCalled();
+    expect(linear.archiveIssue).toHaveBeenCalledTimes(3);
+    expect(linear.archiveIssue).toHaveBeenCalledWith("tut-1");
+    expect(linear.archiveIssue).toHaveBeenCalledWith("tut-2");
+    expect(linear.archiveIssue).toHaveBeenCalledWith("welcome-1");
+    expect(linear.archiveIssue).not.toHaveBeenCalledWith("home-1");
+    expect(linear.archiveIssue).not.toHaveBeenCalledWith("user-1");
+    expect(linear.archiveIssue).not.toHaveBeenCalledWith("user-2");
+  });
+
+  it("archives nothing when only user tickets exist", async () => {
+    const linear = mockLinearClient({
+      listTeamIssues: vi.fn().mockResolvedValue([
+        { id: "user-1", title: "project list" },
+        { id: "user-2", title: "project add https://github.com/owner/name" },
+      ]),
+    });
+    const seeded = await seedControlOnboarding(linear, "team-1");
+    // The Home ticket is still created since it is missing.
+    expect(seeded).toBe(CONTROL_TUTORIAL_ISSUES.length);
+    expect(linear.archiveIssue).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when archiving a legacy tutorial fails", async () => {
+    const linear = mockLinearClient({
+      listTeamIssues: vi.fn().mockResolvedValue([
+        { id: "home-1", title: "🏠 Nightforge Home — run commands here" },
+        { id: "tut-1", title: "📚 Tutorial: Get help" },
+      ]),
+      archiveIssue: vi.fn().mockRejectedValue(new Error("Linear down")),
+    });
+    await expect(seedControlOnboarding(linear, "team-1")).resolves.toBe(0);
   });
 
   it("returns 0 and does not throw when listTeamStates fails", async () => {

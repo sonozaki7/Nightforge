@@ -53,6 +53,7 @@ export interface LinearClient {
     description: string;
     stateId?: string;
   }): Promise<void>;
+  archiveIssue(issueId: string): Promise<void>;
   listTeamIssues(
     teamId: string
   ): Promise<Array<{ id: string; title: string }>>;
@@ -525,6 +526,26 @@ export function createLinearClient(apiKey: string): LinearClient {
       }
 
       logger.info({ teamId: input.teamId }, "Issue created in Linear");
+    },
+
+    async archiveIssue(issueId: string): Promise<void> {
+      const mutation = `
+        mutation IssueArchive($id: String!) {
+          issueArchive(id: $id) {
+            success
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        issueArchive: { success: boolean };
+      }>(mutation, { id: issueId });
+
+      if (!data.issueArchive.success) {
+        throw new Error(`Linear issueArchive failed for "${issueId}"`);
+      }
+
+      logger.info({ issueId }, "Issue archived in Linear");
     },
 
     async listTeamIssues(
