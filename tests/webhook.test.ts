@@ -164,4 +164,35 @@ describe("Linear webhook triggering", () => {
     expect(deps.scheduler.enqueue).not.toHaveBeenCalled();
     expect(deps.linearClient.postComment).toHaveBeenCalled();
   });
+
+  it("handles a bare repo URL title as a control command", async () => {
+    const deps = makeDeps();
+    const projectControl: ProjectControl = {
+      run: vi.fn().mockResolvedValue("Project added"),
+    };
+    deps.projectControl = projectControl;
+    const server = createServer(deps);
+
+    const res = await postIssue(
+      server,
+      issuePayload("create", {
+        title: "https://github.com/sonozaki7/my-app",
+        team: { id: "team-1", name: "Nightforge Control" },
+      })
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(deps.scheduler.enqueue).not.toHaveBeenCalled();
+    // The bare URL is parsed as an add command and reaches the control branch.
+    expect(projectControl.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "add",
+        repoUrl: "https://github.com/sonozaki7/my-app",
+      })
+    );
+    expect(deps.linearClient.postComment).toHaveBeenCalledWith(
+      "issue-1",
+      expect.stringContaining("⚙️")
+    );
+  });
 });

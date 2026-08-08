@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { createProjectControl, parseControlCommand, type ControlDeps } from "../src/projects/control.js";
+import { createProjectControl, parseControlCommand, resolveRepoRef, type ControlDeps } from "../src/projects/control.js";
 import type { LinearClient } from "../src/integrations/linear.js";
 
 /* eslint-disable @typescript-eslint/unbound-method */
@@ -67,6 +67,70 @@ describe("parseControlCommand", () => {
 
   it("returns help for unknown input", () => {
     expect(parseControlCommand("some random ticket").kind).toBe("help");
+  });
+
+  it("parses a bare pasted URL as an add", () => {
+    const cmd = parseControlCommand("https://github.com/sonozaki7/browser-use");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoUrl).toBe("https://github.com/sonozaki7/browser-use");
+      expect(cmd.teamName).toBe("browser-use");
+    }
+  });
+
+  it("parses a bare repo name as an add", () => {
+    const cmd = parseControlCommand("browser-use");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoName).toBe("browser-use");
+      expect(cmd.teamName).toBe("browser-use");
+      expect(cmd.repoUrl).toBeUndefined();
+    }
+  });
+
+  it("parses an owner/name as an add", () => {
+    const cmd = parseControlCommand("sonozaki7/browser-use");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoName).toBe("sonozaki7/browser-use");
+      expect(cmd.teamName).toBe("browser-use");
+    }
+  });
+
+  it("parses add with a bare repo name", () => {
+    const cmd = parseControlCommand("add browser-use");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoName).toBe("browser-use");
+      expect(cmd.teamName).toBe("browser-use");
+    }
+  });
+
+  it("parses project add with a bare repo name", () => {
+    const cmd = parseControlCommand("project add browser-use");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoName).toBe("browser-use");
+      expect(cmd.teamName).toBe("browser-use");
+    }
+  });
+
+  it("parses project add with owner/name", () => {
+    const cmd = parseControlCommand("project add sonozaki7/browser-use");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoName).toBe("sonozaki7/browser-use");
+      expect(cmd.teamName).toBe("browser-use");
+    }
+  });
+
+  it("keeps bare command words as commands, not adds", () => {
+    expect(parseControlCommand("list").kind).toBe("list");
+    expect(parseControlCommand("discover").kind).toBe("discover");
+    expect(parseControlCommand("help").kind).toBe("help");
+    expect(parseControlCommand("status").kind).toBe("help");
+    expect(parseControlCommand("remove").kind).toBe("help");
+    expect(parseControlCommand("some random ticket text").kind).toBe("help");
   });
 });
 
@@ -258,5 +322,193 @@ deployment:
     );
 
     rmSync(srcDir, { recursive: true, force: true });
+  });
+
+  it("adds a project by bare repo name resolved via the GitHub API", async () => {
+    const srcDir = mkdtempSync(path.join(os.tmpdir(), "nightforge-ctrl-src-"));
+    execFileSync("git", ["init", "-q"], { cwd: srcDir });
+    execFileSync("git", ["config", "user.email", "t@example.com"], { cwd: srcDir });
+    execFileSync("git", ["config", "user.name", "T"], { cwd: srcDir });
+    execFileSync("touch", ["README.md"], { cwd: srcDir });
+    execFileSync("git", ["add", "-A"], { cwd: srcDir });
+    execFileSync("git", ["commit", "-qm", "init"], { cwd: srcDir });
+
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([
+          {
+            name: "my-app",
+            full_name: "owner/my-app",
+            clone_url: `file://${srcDir}`,
+          },
+        ] as Array<{ name: string; full_name: string; clone_url: string }>),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const control = makeControl("my-token");
+      const reply = await control.run({
+        kind: "add",
+        repoName: "my-app",
+        teamName: "my-app",
+      });
+
+      expect(reply).toContain("added");
+      const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [
+        string,
+        { headers: { Authorization: string } },
+      ];
+      expect(calledUrl).toBe("https://api.github.com/user/repos?per_page=100");
+      expect(calledInit.headers.Authorization).toBe("Bearer my-token");
+      expect(linear.createTeam).toHaveBeenCalled();
+      expect(linear.createWebhook).toHaveBeenCalledWith(
+        expect.objectContaining({
+          teamId: "team-new",
+          url: "https://getnightforge.com/webhooks/linear",
+        })
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      rmSync(srcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports when a bare repo name does not resolve on GitHub", async () => {
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([] as Array<{ name: string; full_name: string; clone_url: string }>),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const control = makeControl("my-token");
+      const reply = await control.run({
+        kind: "add",
+        repoName: "missing-app",
+        teamName: "missing-app",
+      });
+      expect(reply).toContain("Couldn't find a repo named **missing-app**");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("tells the user to paste a URL when GitHub is not connected", async () => {
+    const control = makeControl();
+    const reply = await control.run({
+      kind: "add",
+      repoName: "my-app",
+      teamName: "my-app",
+    });
+    expect(reply).toContain("GitHub isn't connected");
+  });
+});
+
+describe("resolveRepoRef", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns null for an empty token", async () => {
+    expect(await resolveRepoRef("", "browser-use")).toBeNull();
+  });
+
+  it("resolves a bare repo name found on the account", async () => {
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([
+          {
+            name: "browser-use",
+            full_name: "sonozaki7/browser-use",
+            clone_url: "https://github.com/sonozaki7/browser-use.git",
+          },
+        ]),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resolved = await resolveRepoRef("tok", "browser-use");
+    expect(resolved).toEqual({
+      url: "https://github.com/sonozaki7/browser-use.git",
+      fullName: "sonozaki7/browser-use",
+    });
+  });
+
+  it("resolves an owner/name ref via the repo endpoint", async () => {
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          full_name: "sonozaki7/browser-use",
+          clone_url: "https://github.com/sonozaki7/browser-use.git",
+        }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resolved = await resolveRepoRef("tok", "sonozaki7/browser-use");
+    expect(resolved).toEqual({
+      url: "https://github.com/sonozaki7/browser-use.git",
+      fullName: "sonozaki7/browser-use",
+    });
+    const [calledUrl] = fetchMock.mock.calls[0] as [string, unknown];
+    expect(calledUrl).toBe("https://api.github.com/repos/sonozaki7/browser-use");
+  });
+
+  it("returns null when a bare name is not in the account's repos", async () => {
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([
+          {
+            name: "alpha",
+            full_name: "owner/alpha",
+            clone_url: "https://github.com/owner/alpha.git",
+          },
+        ]),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await resolveRepoRef("tok", "missing")).toBeNull();
+  });
+
+  it("returns null when multiple repos share the same name", async () => {
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([
+          {
+            name: "my-app",
+            full_name: "owner-a/my-app",
+            clone_url: "https://github.com/owner-a/my-app.git",
+          },
+          {
+            name: "my-app",
+            full_name: "owner-b/my-app",
+            clone_url: "https://github.com/owner-b/my-app.git",
+          },
+        ]),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await resolveRepoRef("tok", "my-app")).toBeNull();
+  });
+
+  it("returns null when the owner/name endpoint 404s", async () => {
+    const fetchMock = vi.fn<() => Promise<Response>>().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ message: "Not Found" }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await resolveRepoRef("tok", "someone/nope")).toBeNull();
   });
 });

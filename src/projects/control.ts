@@ -13,7 +13,17 @@ const logger = pino({ name: "nightforge-project-control" });
 
 /** A parsed project-management command from a Linear ticket. */
 export type ControlCommand =
-  | { kind: "add"; repoUrl: string; teamName: string }
+  | {
+      kind: "add";
+      /**
+       * Full cloneable URL. Exactly one of repoUrl / repoName is set:
+       * repoUrl is used directly, repoName needs GitHub resolution.
+       */
+      repoUrl?: string;
+      /** Bare repo name or owner/name that needs GitHub resolution. */
+      repoName?: string;
+      teamName: string;
+    }
   | { kind: "remove"; projectId: string }
   | { kind: "list" }
   | { kind: "discover" }
@@ -50,18 +60,46 @@ export interface ProjectControl {
   run(command: ControlCommand): Promise<string>;
 }
 
+/**
+ * Words that never become a bare-name "add" command. A ticket titled just
+ * "status" or "list" is a mistake, not a request to add a project.
+ */
+const COMMAND_WORDS = new Set([
+  "list",
+  "discover",
+  "status",
+  "remove",
+  "delete",
+  "rm",
+  "help",
+  "add",
+  "link",
+  "project",
+]);
+
 /** Convert a ticket title+description into a project command. */
 export function parseControlCommand(text: string): ControlCommand {
   const t = text.trim().replace(/\s+/g, " ");
 
-  const addMatch = t.match(
+  // 1. Explicit add with a full URL — highest priority, keeps old behavior.
+  const addUrlMatch = t.match(
     /^(?:project\s+)?add\s+(?:project\s+)?(https?:\/\/\S+|git@[^\s]+)/i
   );
-  if (addMatch) {
-    const repoUrl = addMatch[1];
+  if (addUrlMatch) {
+    const repoUrl = addUrlMatch[1];
     const parsed = parseRepoUrl(repoUrl);
     const teamName = parsed?.name ?? "New Project";
     return { kind: "add", repoUrl, teamName };
+  }
+
+  // 2. Explicit add with a name or owner/name (e.g. `add browser-use`).
+  const addNameMatch = t.match(
+    /^(?:project\s+)?add\s+(?:project\s+)?([a-zA-Z0-9][a-zA-Z0-9._-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9._-]*)?)$/i
+  );
+  if (addNameMatch) {
+    const ref = addNameMatch[1];
+    const namePart = ref.split("/").pop() ?? ref;
+    return { kind: "add", repoName: ref, teamName: namePart };
   }
 
   const removeMatch = t.match(
@@ -102,6 +140,30 @@ export function parseControlCommand(text: string): ControlCommand {
     return { kind: "help" };
   }
 
+  // 4. A bare pasted URL is an add.
+  const bareUrlMatch = t.match(/^(https?:\/\/\S+|git@[^\s]+)$/i);
+  if (bareUrlMatch) {
+    const repoUrl = bareUrlMatch[1];
+    const parsed = parseRepoUrl(repoUrl);
+    const teamName = parsed?.name ?? "New Project";
+    return { kind: "add", repoUrl, teamName };
+  }
+
+  // 5. A bare repo name or owner/name is an add — unless it is (or starts
+  // with) a known command word, in which case it falls through to help.
+  const bareNameMatch = t.match(
+    /^([a-zA-Z0-9][a-zA-Z0-9._-]*)(?:\/([a-zA-Z0-9][a-zA-Z0-9._-]*))?$/
+  );
+  if (bareNameMatch) {
+    const first = bareNameMatch[1];
+    if (COMMAND_WORDS.has(first.toLowerCase())) {
+      return { kind: "help" };
+    }
+    const parts = t.split("/");
+    const teamName = parts.pop() ?? t;
+    return { kind: "add", repoName: t, teamName };
+  }
+
   // Command-like but unrecognized → treat as help so the user learns formats.
   if (/^(?:project\s+)?(add|remove|delete|link|status|list|discover)/i.test(t)) {
     return { kind: "help" };
@@ -112,8 +174,11 @@ export function parseControlCommand(text: string): ControlCommand {
 
 export const HELP_TEXT = `Commands (create a ticket here, move it to "Ready for AI"):
 
-project add <repo-url>
-  e.g. project add https://github.com/sonozaki7/taviaverify
+Add a project — any of these work:
+- paste the repo URL (e.g. https://github.com/sonozaki7/browser-use)
+- just the repo name (e.g. browser-use)
+- owner/name (e.g. sonozaki7/browser-use)
+- or: project add <repo-url>
 
 project remove <project-id>
 project list
@@ -122,6 +187,72 @@ project status <project-id>
 project link <source>:<path> -> <target>
   e.g. project link taviaverify:src/lib.ts -> nightforge
 `;
+
+/**
+ * Resolve a bare repo name (or owner/name) to a full GitHub repository.
+ * Uses the GitHub API with the given token. Returns null when the repo
+ * cannot be uniquely identified. Never logs or returns the token.
+ */
+export async function resolveRepoRef(
+  token: string,
+  ref: string
+): Promise<{ url: string; fullName: string } | null> {
+  if (token === "") {
+    return null;
+  }
+
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
+  };
+
+  // owner/name form → hit the repo endpoint directly.
+  if (ref.includes("/")) {
+    const response = await fetch(
+      `https://api.github.com/repos/${ref}`,
+      { headers }
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const repo = (await response.json()) as {
+      clone_url?: string;
+      full_name?: string;
+    };
+    return {
+      url: repo.clone_url ?? `https://github.com/${ref}`,
+      fullName: repo.full_name ?? ref,
+    };
+  }
+
+  // Bare name → search the authenticated user's own repos.
+  const response = await fetch(
+    "https://api.github.com/user/repos?per_page=100",
+    { headers }
+  );
+  if (!response.ok) {
+    return null;
+  }
+  const repos = (await response.json()) as Array<{
+    name?: string;
+    full_name?: string;
+    clone_url?: string;
+  }>;
+  const matches = repos.filter(
+    (repo) => (repo.name ?? "").toLowerCase() === ref.toLowerCase()
+  );
+  if (matches.length !== 1) {
+    // Zero matches, or several repos with the same name under different
+    // owners — ambiguous. Ask for owner/name instead.
+    return null;
+  }
+  const repo = matches[0];
+  const fullName = repo.full_name ?? ref;
+  return {
+    url: repo.clone_url ?? `https://github.com/${fullName}`,
+    fullName,
+  };
+}
 
 export function createProjectControl(deps: ControlDeps): ProjectControl {
   // `releases` is Nightforge's own storage for shipped releases, not a project.
@@ -177,7 +308,23 @@ export function createProjectControl(deps: ControlDeps): ProjectControl {
   };
 
   const cmdAdd = async (command: Extract<ControlCommand, { kind: "add" }>): Promise<string> => {
-    const result = await addProject(deps.projectsDir, command.repoUrl);
+    let repoUrl = command.repoUrl;
+    if (repoUrl === undefined && command.repoName !== undefined) {
+      const token = deps.githubToken ?? "";
+      if (token === "") {
+        return "❌ Can't look up that repo name — GitHub isn't connected. Paste the full URL instead (e.g. https://github.com/owner/name).";
+      }
+      const resolved = await resolveRepoRef(token, command.repoName);
+      if (resolved === null) {
+        return `❌ Couldn't find a repo named **${command.repoName}** on your GitHub account. Try \`project discover\` or paste the full URL.`;
+      }
+      repoUrl = resolved.url;
+    }
+    if (repoUrl === undefined) {
+      return "❌ No repo URL given. Paste the full URL or give a repo name.";
+    }
+
+    const result = await addProject(deps.projectsDir, repoUrl, deps.githubToken);
     if (!result.success) {
       return `❌ ${result.message}`;
     }
@@ -207,13 +354,13 @@ export function createProjectControl(deps: ControlDeps): ProjectControl {
 
 - Working copy deleted from the server
 - GitHub repo is untouched and safe
-- Add it back anytime with \`project add <repo-url>\``;
+- Add it back anytime by pasting the repo URL or typing its name.`;
   };
 
   const cmdList = (): string => {
     const ids = listProjectIds();
     if (ids.length === 0) {
-      return "No projects registered yet. Add one with `project add <repo-url>`.";
+      return "No projects registered yet. Add one by pasting a repo URL or typing a repo name.";
     }
     const lines = ids.map((id) => `- **${id}**`);
     return `Registered projects:\n\n${lines.join("\n")}`;
@@ -320,7 +467,7 @@ It lives at \`.nightforge/references/${command.sourceProject}/${command.filePath
       return "No GitHub repos found on this account.";
     }
 
-    return `GitHub repos on this account:\n\n${entries.join("\n")}\n\n_Add one with \`project add <repo-url>\`._`;
+    return `GitHub repos on this account:\n\n${entries.join("\n")}\n\n_Add one by replying with just its name (e.g. \`browser-use\`) or pasting the URL._`;
   };
 
   return {

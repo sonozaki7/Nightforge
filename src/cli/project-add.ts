@@ -110,7 +110,8 @@ risk:
 
 export async function addProject(
   projectsDir: string,
-  repoUrl: string
+  repoUrl: string,
+  githubToken = ""
 ): Promise<AddProjectResult> {
   const parsed = parseRepoUrl(repoUrl);
   if (parsed === null) {
@@ -136,9 +137,29 @@ export async function addProject(
 
   try {
     mkdirSync(projectsDir, { recursive: true });
-    await execFileAsync("git", ["clone", "--quiet", repoUrl, repoPath], {
-      timeout: 300000,
-    });
+    // For private repos, use a credential helper that reads an env var. This
+    // authenticates the clone WITHOUT putting the token in the URL or argv
+    // (which would leak it into process listings or .git/config). With no
+    // token, clone exactly as before (tests use local file:// repos).
+    const credentialArgs: string[] = [];
+    if (githubToken !== "") {
+      credentialArgs.push(
+        "-c",
+        "credential.helper=!f() { echo username=x-access-token; echo \"password=$NF_GIT_TOKEN\"; }; f"
+      );
+    }
+    const env =
+      githubToken !== ""
+        ? { ...process.env, NF_GIT_TOKEN: githubToken }
+        : undefined;
+    await execFileAsync(
+      "git",
+      [...credentialArgs, "clone", "--quiet", repoUrl, repoPath],
+      {
+        timeout: 300000,
+        ...(env !== undefined ? { env } : {}),
+      }
+    );
   } catch (err) {
     const error = err as Error;
     logger.error({ err: error.message }, "Clone failed");
