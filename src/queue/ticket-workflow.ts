@@ -102,6 +102,7 @@ export interface TicketOutcome {
     | "awaiting_approval"
     | "blocked"
     | "merge_failed"
+    | "ci_failed"
     | "deploy_failed"
     | "verify_failed";
   gate: ReleaseGateResult;

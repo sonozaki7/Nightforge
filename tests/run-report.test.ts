@@ -19,6 +19,7 @@ const pipeline: PipelineResult = {
     message: "Deployed release 20260805-183532",
   },
   health: null,
+  ciGate: null,
   durationMs: 4637,
   message: "Shipped. Tag: deploy/abc-123. Duration: 4637ms",
 };

@@ -3,6 +3,7 @@ import { createExecutionPipeline, type PipelineDeps } from "../src/projects/pipe
 import type { Deployer, DeployResult } from "../src/projects/deployer.js";
 import type { AutoMerger, AutoMergeResult } from "../src/projects/auto-merge.js";
 import type { HealthChecker, HealthCheckResult } from "../src/integrations/health.js";
+import type { CiGate, CiGateResult } from "../src/projects/ci-gate.js";
 import type { ProjectConfig } from "../src/projects/registry.js";
 
 /* eslint-disable @typescript-eslint/unbound-method */
@@ -63,15 +64,27 @@ function mockHealthResult(overrides?: Partial<HealthCheckResult>): HealthCheckRe
   };
 }
 
+function mockCiGateResult(overrides?: Partial<CiGateResult>): CiGateResult {
+  return {
+    passed: true,
+    state: "success",
+    message: "CI green",
+    durationMs: 500,
+    ...overrides,
+  };
+}
+
 describe("ExecutionPipeline", () => {
   let deps: PipelineDeps;
   let mockAutoMerger: AutoMerger;
   let mockDeployer: Deployer;
   let mockHealthChecker: HealthChecker;
+  let mockCiGate: CiGate;
 
   beforeEach(() => {
     mockAutoMerger = {
       commitAndMerge: vi.fn().mockResolvedValue(mockMergeResult()),
+      pushToRemote: vi.fn().mockResolvedValue(true),
       revertMerge: vi.fn().mockResolvedValue(true),
     };
     mockDeployer = {
@@ -84,10 +97,14 @@ describe("ExecutionPipeline", () => {
       verify: vi.fn().mockResolvedValue(mockHealthResult()),
       checkHttp: vi.fn().mockResolvedValue(true),
     };
+    mockCiGate = {
+      waitForGreen: vi.fn().mockResolvedValue(mockCiGateResult()),
+    };
     deps = {
       autoMerger: mockAutoMerger,
       deployer: mockDeployer,
       healthChecker: mockHealthChecker,
+      ciGate: mockCiGate,
     };
   });
 
@@ -186,6 +203,70 @@ describe("ExecutionPipeline", () => {
     expect(result.success).toBe(true);
     expect(result.state).toBe("shipped");
     expect(result.deploy).toBeNull();
+    expect(mockDeployer.deploy).not.toHaveBeenCalled();
+    expect(mockAutoMerger.pushToRemote).not.toHaveBeenCalled();
+  });
+
+  it("pushes to origin before deploying", async () => {
+    const pipeline = createExecutionPipeline(deps);
+    const result = await pipeline.execute(
+      "/worktrees/test-TICKET-6",
+      mockProjectConfig(),
+      "TICKET-6",
+      "Feature X"
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockAutoMerger.pushToRemote).toHaveBeenCalledWith(
+      "/srv/apps/test/repository",
+      "deploy/TICKET-1"
+    );
+    expect(mockCiGate.waitForGreen).toHaveBeenCalledWith(
+      "/srv/apps/test/repository",
+      "def456"
+    );
+  });
+
+  it("reverts merge when push to origin fails", async () => {
+    (mockAutoMerger.pushToRemote as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+    const pipeline = createExecutionPipeline(deps);
+    const result = await pipeline.execute(
+      "/worktrees/test-TICKET-7",
+      mockProjectConfig(),
+      "TICKET-7",
+      "Feature that cannot push"
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.state).toBe("ci_failed");
+    expect(mockAutoMerger.revertMerge).toHaveBeenCalledWith(
+      "/srv/apps/test/repository",
+      "def456"
+    );
+    expect(mockDeployer.deploy).not.toHaveBeenCalled();
+  });
+
+  it("reverts merge when CI gate blocks the release", async () => {
+    (mockCiGate.waitForGreen as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockCiGateResult({ passed: false, state: "failure", message: "CI reported a failure" })
+    );
+
+    const pipeline = createExecutionPipeline(deps);
+    const result = await pipeline.execute(
+      "/worktrees/test-TICKET-8",
+      mockProjectConfig(),
+      "TICKET-8",
+      "Feature that fails CI"
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.state).toBe("ci_failed");
+    expect(result.ciGate?.state).toBe("failure");
+    expect(mockAutoMerger.revertMerge).toHaveBeenCalledWith(
+      "/srv/apps/test/repository",
+      "def456"
+    );
     expect(mockDeployer.deploy).not.toHaveBeenCalled();
   });
 });

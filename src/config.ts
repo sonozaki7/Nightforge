@@ -95,6 +95,13 @@ const configSchema = z.object({
   timezone: z.string().default("Asia/Bangkok"),
   /** Project id tickets are routed to (matches a dir under PROJECTS_DIR). */
   projectId: z.string().default("nightforge"),
+  github: z.object({
+    /**
+     * Fine-grained PAT used to push merged code to origin and to query the
+     * commit status API (the CI gate). Empty = gate skipped (local dev).
+     */
+    token: z.string().default(""),
+  }),
   server: z.object({
     port: z.coerce.number().int().positive().default(3000),
     host: z.string().default("0.0.0.0"),
@@ -177,6 +184,9 @@ export interface Config {
   };
   timezone: string;
   projectId: string;
+  github: {
+    token: string;
+  };
   server: {
     port: number;
     host: string;
@@ -260,6 +270,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     timezone: env.TIMEZONE,
     projectId: env.PROJECT_ID,
+    github: {
+      token: env.GITHUB_TOKEN,
+    },
     server: {
       port: env.PORT,
       host: env.HOST,

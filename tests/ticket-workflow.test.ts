@@ -54,6 +54,7 @@ function shippedPipeline(): ExecutionPipeline {
     merge: null,
     deploy: null,
     health: null,
+    ciGate: null,
     durationMs: 1200,
     message: "Shipped.",
   };

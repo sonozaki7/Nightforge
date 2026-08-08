@@ -14,6 +14,7 @@ import { createServer } from "./server.js";
 import { createDeployer } from "./projects/deployer.js";
 import { createAutoMerger } from "./projects/auto-merge.js";
 import { createExecutionPipeline } from "./projects/pipeline.js";
+import { createCiGate } from "./projects/ci-gate.js";
 import { loadProjectConfig, repoPathFor } from "./projects/project-loader.js";
 import { createHealthChecker } from "./integrations/health.js";
 import { createTelemetry } from "./memory/telemetry.js";
@@ -87,7 +88,8 @@ async function main(): Promise<void> {
   const deployer = createDeployer();
   const autoMerger = createAutoMerger();
   const healthChecker = createHealthChecker();
-  const pipeline = createExecutionPipeline({ deployer, autoMerger, healthChecker });
+  const ciGate = createCiGate();
+  const pipeline = createExecutionPipeline({ deployer, autoMerger, healthChecker, ciGate });
 
   const artifactStore = createArtifactStore(".nightforge/artifacts");
   const askOnce = createAskOncePolicy(artifactStore);

@@ -29,6 +29,8 @@ export interface AutoMerger {
     ticketId: string,
     summary: string
   ): Promise<AutoMergeResult>;
+  /** Push local main + tags to origin so the CI gate can judge the commit. */
+  pushToRemote(mainRepoPath: string, tag?: string | null): Promise<boolean>;
   /** Revert a merge commit on main (instant undo) */
   revertMerge(mainRepoPath: string, mergeSha: string): Promise<boolean>;
 }
@@ -171,6 +173,50 @@ export function createAutoMerger(): AutoMerger {
           tag: null,
           message: `Auto-merge failed: ${error.message}`,
         };
+      }
+    },
+
+    async pushToRemote(
+      mainRepoPath: string,
+      tag?: string | null
+    ): Promise<boolean> {
+      const log = logger.child({ mainRepoPath });
+
+      // Do not hardcode the token into the command line — it would leak into
+      // process listings. Use a credential helper that reads an env var.
+      const token = process.env.GITHUB_TOKEN ?? "";
+      const credentialArgs: string[] = [];
+      if (token) {
+        credentialArgs.push(
+          "-c",
+          "credential.helper=!f() { echo username=x-access-token; echo \"password=$NF_GIT_TOKEN\"; }; f"
+        );
+      }
+
+      try {
+        const env = { ...process.env };
+        if (token) env.NF_GIT_TOKEN = token;
+
+        await execFileAsync("git", [...credentialArgs, "push", "origin", "main"], {
+          cwd: mainRepoPath,
+          env,
+          timeout: 120000,
+        });
+
+        if (tag) {
+          await execFileAsync(
+            "git",
+            [...credentialArgs, "push", "origin", tag],
+            { cwd: mainRepoPath, env, timeout: 120000 }
+          );
+        }
+
+        log.info({ tag }, "Pushed to origin");
+        return true;
+      } catch (err) {
+        const error = err as Error;
+        log.warn({ err: error.message }, "Push to origin failed");
+        return false;
       }
     },
 
