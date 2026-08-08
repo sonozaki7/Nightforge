@@ -159,7 +159,7 @@ async function runChecks() {
 
   // CHK1: project list on the Home ticket, matched against the on-disk registry.
   try {
-    const before = await lastComment();
+    const before = await lastCommentAt();
     const reply = await waitForReply(homeId, "project list", before);
     console.log(`\n== CHK1 'project list' reply ==\n${reply ?? "(no reply)"}\n`);
     if (reply === null) {
@@ -181,7 +181,7 @@ async function runChecks() {
 
   // CHK2: help.
   try {
-    const before2 = await lastComment();
+    const before2 = await lastCommentAt();
     const reply = await waitForReply(homeId, "help", before2);
     console.log(`\n== CHK2 'help' reply ==\n${reply ?? "(no reply)"}\n`);
     if (reply === null) {
@@ -200,7 +200,7 @@ async function runChecks() {
 
   // CHK3: discover — live server has GITHUB_TOKEN, so expect a real listing.
   try {
-    const before3 = await lastComment();
+    const before3 = await lastCommentAt();
     const reply = await waitForReply(homeId, "project discover", before3);
     console.log(`\n== CHK3 'project discover' reply ==\n${reply ?? "(no reply)"}\n`);
     if (reply === null) {
