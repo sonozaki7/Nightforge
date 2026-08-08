@@ -129,6 +129,15 @@ deployment:
     expect(reply).toContain("No projects registered");
   });
 
+  it("does not list Nightforge's internal reserved folders", async () => {
+    makeRepo("alpha");
+    mkdirSync(path.join(dir, "releases"), { recursive: true });
+    const control = makeControl();
+    const reply = await control.run({ kind: "list" });
+    expect(reply).toContain("alpha");
+    expect(reply).not.toContain("releases");
+  });
+
   it("removes a project folder", async () => {
     const repoPath = makeRepo("alpha");
     const control = makeControl();

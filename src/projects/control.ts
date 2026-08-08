@@ -113,10 +113,16 @@ project link <source>:<path> -> <target>
 `;
 
 export function createProjectControl(deps: ControlDeps): ProjectControl {
+  // `releases` is Nightforge's own storage for shipped releases, not a project.
+  const RESERVED_DIRS = new Set(["releases"]);
+
   const listProjectIds = (): string[] => {
     try {
       return readdirSync(deps.projectsDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
+        .filter(
+          (entry) =>
+            entry.isDirectory() && !RESERVED_DIRS.has(entry.name)
+        )
         .map((entry) => entry.name);
     } catch {
       return [];
