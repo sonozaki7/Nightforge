@@ -6,6 +6,7 @@ import type { LinearClient } from "../src/integrations/linear.js";
 import type { Scheduler } from "../src/queue/scheduler.js";
 import type { EpicDispatch } from "../src/epic/epic-dispatch.js";
 import type { ApprovalStore, ApprovalRecord } from "../src/queue/approvals.js";
+import type { TeamRouter } from "../src/projects/team-router.js";
 
 /* eslint-disable @typescript-eslint/unbound-method */
 
@@ -158,6 +159,84 @@ describe("Linear webhook integration", () => {
     expect(mockLinearClient.postComment).toHaveBeenCalledWith(
       "issue-123",
       expect.stringContaining("Nightforge claimed")
+    );
+  });
+
+  it("should route a ticket to the project mapped to its Linear team", async () => {
+    vi.mocked(mockLinearClient.verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(mockScheduler.enqueue).mockResolvedValue("job-123");
+    vi.mocked(mockLinearClient.postComment).mockResolvedValue(undefined);
+
+    const mockTeamRouter: TeamRouter = {
+      resolveProjectForTeam: vi.fn().mockImplementation((team: string) => {
+        return team === "TEAM-ABC" ? "backend" : null;
+      }),
+      listProjects: vi.fn().mockReturnValue(["backend"]),
+    };
+
+    const server = createServer({
+      linearClient: mockLinearClient,
+      scheduler: mockScheduler,
+      webhookSecret,
+      projectId,
+      approvalStore: mockApprovalStore,
+      teamRouter: mockTeamRouter,
+    });
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: {
+        ...validPayload,
+        data: {
+          ...validPayload.data,
+          team: { id: "TEAM-ABC", name: "Backend" },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockScheduler.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "backend" })
+    );
+  });
+
+  it("should fall back to the default project for unmapped teams", async () => {
+    vi.mocked(mockLinearClient.verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(mockScheduler.enqueue).mockResolvedValue("job-123");
+    vi.mocked(mockLinearClient.postComment).mockResolvedValue(undefined);
+
+    const mockTeamRouter: TeamRouter = {
+      resolveProjectForTeam: vi.fn().mockReturnValue(null),
+      listProjects: vi.fn().mockReturnValue([]),
+    };
+
+    const server = createServer({
+      linearClient: mockLinearClient,
+      scheduler: mockScheduler,
+      webhookSecret,
+      projectId,
+      approvalStore: mockApprovalStore,
+      teamRouter: mockTeamRouter,
+    });
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: {
+        ...validPayload,
+        data: {
+          ...validPayload.data,
+          team: { id: "OTHER", name: "Other" },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockScheduler.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "test-project" })
     );
   });
 

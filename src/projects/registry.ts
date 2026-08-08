@@ -10,6 +10,11 @@ const projectConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   path: z.string().min(1),
+  /**
+   * Linear team identifiers (id or key/name) that route tickets to this
+   * project. Empty = never auto-routed; matches are case-insensitive.
+   */
+  linearTeams: z.array(z.string()).default([]),
   deployment: z.object({
     policy: deploymentPolicySchema,
     testCommand: z.string().min(1),
@@ -51,6 +56,7 @@ export interface ProjectConfig {
   id: string;
   name: string;
   path: string;
+  linearTeams: string[];
   deployment: {
     policy: "direct-prod" | "staging-first" | "manual-prod";
     testCommand: string;

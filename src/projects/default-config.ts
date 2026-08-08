@@ -13,6 +13,7 @@ export function buildDefaultProjectConfig(
     id: projectId,
     name: projectId,
     path: repoPath,
+    linearTeams: [],
     deployment: {
       policy: "direct-prod",
       testCommand: "npm test",

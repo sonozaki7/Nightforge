@@ -8,6 +8,7 @@ import type { Scheduler, TicketJob } from "./queue/scheduler.js";
 import { linearPriorityToNightforge, mapPriority } from "./queue/scheduler.js";
 import type { EpicDispatch } from "./epic/epic-dispatch.js";
 import type { ApprovalStore } from "./queue/approvals.js";
+import type { TeamRouter } from "./projects/team-router.js";
 
 const logger = pino({ name: "nightforge" });
 
@@ -31,6 +32,12 @@ const webhookPayloadSchema = z.object({
     state: z.object({
       name: z.string(),
     }),
+    team: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+      })
+      .optional(),
     labels: z
       .array(z.object({ name: z.string() }))
       .optional()
@@ -58,6 +65,7 @@ interface WebhookBody {
     description?: string | null;
     priority: number;
     state: { name: string };
+    team?: { id: string; name: string };
     labels?: Array<{ name: string }>;
   };
 }
@@ -67,6 +75,11 @@ export interface ServerDeps {
   scheduler: Scheduler;
   webhookSecret: string;
   projectId: string;
+  /**
+   * Routes a Linear team to a project id; falls back to projectId when a
+   * team is unmapped or no router is supplied.
+   */
+  teamRouter?: TeamRouter;
   /** Tickets held by the release gate; `/approve` comments re-run them. */
   approvalStore: ApprovalStore;
   /** When present, epic-labeled issues are routed through the epic workflow. */
@@ -221,6 +234,16 @@ export function createServer(deps: ServerDeps): FastifyInstance {
       const labels = payload.data.labels.map((l) => l.name);
       const priority = linearPriorityToNightforge(payload.data.priority);
 
+      // Route by Linear team → project. Unmapped teams fall back to the
+      // default project id (single-project installs are unaffected).
+      const team = payload.data.team;
+      const projectId =
+        deps.teamRouter !== undefined && team !== undefined
+          ? (deps.teamRouter.resolveProjectForTeam(team.id) ??
+              deps.teamRouter.resolveProjectForTeam(team.name) ??
+              deps.projectId)
+          : deps.projectId;
+
       const issue: LinearIssue = {
         id: payload.data.id,
         identifier: payload.data.id,
@@ -248,7 +271,7 @@ export function createServer(deps: ServerDeps): FastifyInstance {
 
       const job: TicketJob = {
         ticketId: payload.data.id,
-        projectId: deps.projectId,
+        projectId,
         title: payload.data.title,
         description: payload.data.description ?? "",
         labels,
@@ -264,7 +287,7 @@ export function createServer(deps: ServerDeps): FastifyInstance {
       );
 
       logger.info(
-        { ticketId: payload.data.id, title: payload.data.title },
+        { ticketId: payload.data.id, title: payload.data.title, projectId },
         "Ticket enqueued from webhook"
       );
 

@@ -2,6 +2,10 @@ id: nightforge
 name: Nightforge
 path: /opt/nightforge/projects/nightforge
 
+# Linear teams (id or name) that route tickets to THIS project. Empty =
+# never auto-routed; a ticket from an unmapped team uses PROJECT_ID.
+linearTeams: []
+
 deployment:
   policy: direct-prod
   testCommand: npm test

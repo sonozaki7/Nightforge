@@ -16,6 +16,7 @@ import { createAutoMerger } from "./projects/auto-merge.js";
 import { createExecutionPipeline } from "./projects/pipeline.js";
 import { createCiGate } from "./projects/ci-gate.js";
 import { loadProjectConfig, repoPathFor } from "./projects/project-loader.js";
+import { createTeamRouter } from "./projects/team-router.js";
 import { createHealthChecker } from "./integrations/health.js";
 import { createTelemetry } from "./memory/telemetry.js";
 import { createSpeedMetrics } from "./memory/speed-metrics.js";
@@ -386,6 +387,7 @@ async function main(): Promise<void> {
     scheduler,
     webhookSecret: config.linear.webhookSecret,
     projectId: config.projectId,
+    teamRouter: createTeamRouter(config.paths.projectsDir),
     approvalStore,
     epicDispatch: createEpicDispatch({
       intake: createEpicIntake(),
