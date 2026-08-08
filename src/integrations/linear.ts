@@ -15,6 +15,11 @@ export interface LinearIssue {
   stateName: string;
 }
 
+export interface LinearTeam {
+  id: string;
+  name: string;
+}
+
 export interface LinearClient {
   verifyWebhookSignature(
     payload: string,
@@ -25,6 +30,14 @@ export interface LinearClient {
   getChildIssues(parentIssueId: string): Promise<LinearIssue[]>;
   postComment(issueId: string, body: string): Promise<void>;
   updateIssueState(issueId: string, stateName: string): Promise<void>;
+  listTeams(): Promise<LinearTeam[]>;
+  createTeam(name: string): Promise<LinearTeam>;
+  createWebhook(input: {
+    teamId: string;
+    url: string;
+    label: string;
+    secret: string;
+  }): Promise<void>;
 }
 
 export function createLinearClient(apiKey: string): LinearClient {
@@ -249,6 +262,98 @@ export function createLinearClient(apiKey: string): LinearClient {
       });
 
       logger.info({ issueId, stateName }, "Issue state updated");
+    },
+
+    async listTeams(): Promise<LinearTeam[]> {
+      const query = `
+        query ListTeams {
+          teams(first: 100) {
+            nodes {
+              id
+              name
+            }
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        teams: { nodes: Array<{ id: string; name: string }> };
+      }>(query, {});
+
+      return data.teams.nodes.map((team) => ({
+        id: team.id,
+        name: team.name,
+      }));
+    },
+
+    async createTeam(name: string): Promise<LinearTeam> {
+      const mutation = `
+        mutation CreateTeam($name: String!) {
+          teamCreate(input: { name: $name }) {
+            success
+            team {
+              id
+              name
+            }
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        teamCreate: {
+          success: boolean;
+          team: { id: string; name: string };
+        };
+      }>(mutation, { name });
+
+      if (!data.teamCreate.success) {
+        throw new Error(`Linear teamCreate failed for "${name}"`);
+      }
+
+      return data.teamCreate.team;
+    },
+
+    async createWebhook(input: {
+      teamId: string;
+      url: string;
+      label: string;
+      secret: string;
+    }): Promise<void> {
+      const mutation = `
+        mutation CreateWebhook(
+          $teamId: String!
+          $url: String!
+          $label: String!
+          $secret: String!
+        ) {
+          webhookCreate(
+            input: {
+              teamId: $teamId
+              url: $url
+              label: $label
+              secret: $secret
+              resourceTypes: [Issue]
+            }
+          ) {
+            success
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        webhookCreate: { success: boolean };
+      }>(mutation, {
+        teamId: input.teamId,
+        url: input.url,
+        label: input.label,
+        secret: input.secret,
+      });
+
+      if (!data.webhookCreate.success) {
+        throw new Error(`Linear webhookCreate failed for "${input.label}"`);
+      }
+
+      logger.info({ teamId: input.teamId }, "Webhook created for team");
     },
   };
 }

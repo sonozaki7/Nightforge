@@ -102,6 +102,15 @@ const configSchema = z.object({
      */
     token: z.string().default(""),
   }),
+  control: z.object({
+    /**
+     * Linear team id or name whose tickets are treated as project-management
+     * commands (add/remove/list/status/link) instead of code tickets.
+     */
+    team: z.string().default(""),
+    /** Public base URL used when wiring webhooks for new Linear teams. */
+    publicBaseUrl: z.string().url().default("https://getnightforge.com"),
+  }),
   server: z.object({
     port: z.coerce.number().int().positive().default(3000),
     host: z.string().default("0.0.0.0"),
@@ -186,6 +195,10 @@ export interface Config {
   projectId: string;
   github: {
     token: string;
+  };
+  control: {
+    team: string;
+    publicBaseUrl: string;
   };
   server: {
     port: number;
@@ -272,6 +285,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     projectId: env.PROJECT_ID,
     github: {
       token: env.GITHUB_TOKEN,
+    },
+    control: {
+      team: env.CONTROL_TEAM,
+      publicBaseUrl: env.PUBLIC_BASE_URL,
     },
     server: {
       port: env.PORT,

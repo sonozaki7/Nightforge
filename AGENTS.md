@@ -21,6 +21,23 @@ Rules for AI agents implementing the Nightforge platform itself.
 - Keep explanations short and friendly. If the user asks "what does X mean", answer simply first, then add detail only if helpful.
 - **Always end with exact actions.** When something needs fixing, configuring, or deciding, do not just describe the problem — list the precise steps for the user to take (or offer to do them yourself). Say exactly what to click, what to install, what to paste, in order. A list of "this needs X" without steps is not useful.
 
+## Product Delivery: NO Terminal for the User (non-negotiable)
+
+- The user NEVER touches a terminal, SSH, VPS, or command line — neither their MacBook nor any server. Do not give terminal commands as the primary path.
+- Every product capability MUST be usable through the UI (Linear as the day-to-day surface, and/or a web dashboard). This includes: adding a project, removing a project, configuring a project, checking status, approving releases, viewing costs.
+- The audience includes NON-TECHNICAL team members (not just the owner). Every action must be discoverable and clickable, never something that requires running a command.
+- When a task normally requires a terminal step, the correct answer is: "build a UI/Linear command for it" — not "run this command".
+- If you are about to reply with a terminal command for a user-facing task, STOP and instead design the UI/Liner flow.
+
+---
+
+## User Preference: Linear-First Operations
+
+- All project management (add / remove / configure projects) must be possible through Linear.
+- The owner is technical but wants non-technical colleagues to manage projects too.
+- Favor: Linear command issues (e.g. a ticket titled `project add <repo-url>` in a control team) and/or a simple web dashboard.
+- Nightforge itself should be the one doing the heavy lifting (cloning, generating config, wiring webhooks) after a human picks an action in the UI.
+
 ---
 
 ## Scope Discipline

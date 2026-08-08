@@ -20,6 +20,9 @@ describe("Linear webhook integration", () => {
     getChildIssues: vi.fn(),
     postComment: vi.fn(),
     updateIssueState: vi.fn(),
+    listTeams: vi.fn(),
+    createTeam: vi.fn(),
+    createWebhook: vi.fn(),
   };
 
   const mockScheduler: Scheduler = {
@@ -237,6 +240,47 @@ describe("Linear webhook integration", () => {
     expect(response.statusCode).toBe(200);
     expect(mockScheduler.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: "test-project" })
+    );
+  });
+
+  it("routes control-team tickets to the project control handler", async () => {
+    vi.mocked(mockLinearClient.verifyWebhookSignature).mockReturnValue(true);
+    vi.mocked(mockLinearClient.postComment).mockResolvedValue(undefined);
+
+    const controlRun = vi.fn().mockResolvedValue(
+      "✅ Project **backend** added and ready."
+    );
+
+    const server = createServer({
+      linearClient: mockLinearClient,
+      scheduler: mockScheduler,
+      webhookSecret,
+      projectId,
+      approvalStore: mockApprovalStore,
+      controlTeam: "Nightforge Control",
+      projectControl: { run: controlRun },
+    });
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/webhooks/linear",
+      headers: { "linear-signature": "valid" },
+      payload: {
+        ...validPayload,
+        data: {
+          ...validPayload.data,
+          team: { id: "ctrl-team", name: "Nightforge Control" },
+          title: "project add https://github.com/sonozaki7/backend",
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockScheduler.enqueue).not.toHaveBeenCalled();
+    expect(controlRun).toHaveBeenCalled();
+    expect(mockLinearClient.postComment).toHaveBeenCalledWith(
+      "issue-123",
+      expect.stringContaining("Project **backend** added")
     );
   });
 

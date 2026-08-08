@@ -9,6 +9,8 @@ import { linearPriorityToNightforge, mapPriority } from "./queue/scheduler.js";
 import type { EpicDispatch } from "./epic/epic-dispatch.js";
 import type { ApprovalStore } from "./queue/approvals.js";
 import type { TeamRouter } from "./projects/team-router.js";
+import type { ProjectControl } from "./projects/control.js";
+import { parseControlCommand } from "./projects/control.js";
 
 const logger = pino({ name: "nightforge" });
 
@@ -80,6 +82,12 @@ export interface ServerDeps {
    * team is unmapped or no router is supplied.
    */
   teamRouter?: TeamRouter;
+  /**
+   * When set, tickets from `controlTeam` (id or name) are treated as
+   * project-management commands instead of code tickets.
+   */
+  projectControl?: ProjectControl;
+  controlTeam?: string;
   /** Tickets held by the release gate; `/approve` comments re-run them. */
   approvalStore: ApprovalStore;
   /** When present, epic-labeled issues are routed through the epic workflow. */
@@ -231,12 +239,37 @@ export function createServer(deps: ServerDeps): FastifyInstance {
         return;
       }
 
+      // Control team: this ticket is a project-management command, not a
+      // coding job. Parse it, run it, and reply on the ticket.
+      const team = payload.data.team;
+      const controlTeam = deps.controlTeam ?? "";
+      const isControlTicket =
+        deps.projectControl !== undefined &&
+        controlTeam !== "" &&
+        team !== undefined &&
+        (team.id === controlTeam || team.name === controlTeam);
+
+      if (isControlTicket) {
+        const commandText = `${payload.data.title} ${payload.data.description ?? ""}`;
+        const command = parseControlCommand(commandText);
+        const commandReply = await deps.projectControl?.run(command);
+        await deps.linearClient.postComment(
+          payload.data.id,
+          `⚙️ ${commandReply ?? "Command processed."}`
+        );
+        logger.info(
+          { ticketId: payload.data.id, command: command.kind },
+          "Control command processed from webhook"
+        );
+        await reply.status(200).send({ message: `Command ${command.kind} processed` });
+        return;
+      }
+
       const labels = payload.data.labels.map((l) => l.name);
       const priority = linearPriorityToNightforge(payload.data.priority);
 
       // Route by Linear team → project. Unmapped teams fall back to the
       // default project id (single-project installs are unaffected).
-      const team = payload.data.team;
       const projectId =
         deps.teamRouter !== undefined && team !== undefined
           ? (deps.teamRouter.resolveProjectForTeam(team.id) ??
