@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import crypto from "node:crypto";
 import { createServer, type ServerDeps } from "../src/server.js";
+import { createProjectControl } from "../src/projects/control.js";
 import type { LinearClient, LinearIssue } from "../src/integrations/linear.js";
 import type { Scheduler } from "../src/queue/scheduler.js";
 import type { ProjectControl } from "../src/projects/control.js";
@@ -251,5 +255,76 @@ describe("Linear comment console", () => {
     expect(res.statusCode).toBe(400);
     expect(run).not.toHaveBeenCalled();
     expect(linear.getIssue).not.toHaveBeenCalled();
+  });
+});
+
+describe("Linear comment console with a real project control (registry listing)", () => {
+  let projectsDir = "";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    projectsDir = mkdtempSync(path.join(os.tmpdir(), "nf-ctrl-real-"));
+    const markerDir = path.join(projectsDir, "myapp", ".nightforge");
+    mkdirSync(markerDir, { recursive: true });
+    writeFileSync(path.join(markerDir, "project.yaml"), "id: myapp\nname: myapp\n", "utf8");
+    mkdirSync(path.join(projectsDir, "stray"), { recursive: true });
+    mkdirSync(path.join(projectsDir, "releases"), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(projectsDir, { recursive: true, force: true });
+  });
+
+  function realServer(): {
+    server: ReturnType<typeof createServer>;
+    linear: ReturnType<typeof linearClientMock>;
+  } {
+    const linear = linearClientMock();
+    vi.mocked(linear.getIssue).mockResolvedValue(controlIssue());
+    const projectControl = createProjectControl({
+      linearClient: linear,
+      projectsDir,
+      publicBaseUrl: "https://getnightforge.com",
+      webhookSecret: SECRET,
+      defaultProjectId: "nightforge",
+    });
+    const deps: ServerDeps = {
+      linearClient: linear,
+      scheduler: schedulerMock(),
+      webhookSecret: SECRET,
+      projectId: "nightforge",
+      controlTeam: "team-ctrl",
+      projectControl,
+      approvalStore: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn(),
+        remove: vi.fn(),
+      },
+    };
+    return { server: createServer(deps), linear };
+  }
+
+  it("lists only registered projects from a real registry on the server", async () => {
+    const { server, linear } = realServer();
+
+    const res = await postComment(server, commentPayload("project list"));
+
+    expect(res.statusCode).toBe(200);
+    const [issueId, reply] = vi.mocked(linear.postComment).mock.calls[0];
+    expect(issueId).toBe("issue-ctrl");
+    expect(reply).toContain("⚙️ Registered projects:");
+    expect(reply).toContain("- **myapp**");
+    expect(reply).not.toContain("stray");
+    expect(reply).not.toContain("nightforge-app");
+    expect(reply).not.toContain("releases");
+  });
+
+  it("ignores a random chat comment on the control home with real wiring", async () => {
+    const { server, linear } = realServer();
+
+    const res = await postComment(server, commentPayload("just saying hi 👋"));
+
+    expect(res.statusCode).toBe(200);
+    expect(linear.postComment).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createProjectControl, parseControlCommand, resolveRepoRef, type ControlDeps } from "../src/projects/control.js";
+import { registeredProjectIds } from "../src/projects/project-registry.js";
 import type { LinearClient } from "../src/integrations/linear.js";
 
 /* eslint-disable @typescript-eslint/unbound-method */
@@ -420,6 +421,52 @@ deployment:
       teamName: "my-app",
     });
     expect(reply).toContain("GitHub isn't connected");
+  });
+});
+
+describe("registeredProjectIds", () => {
+  let dir = "";
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), "nf-reg-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function markProject(name: string): void {
+    const markerDir = path.join(dir, name, ".nightforge");
+    mkdirSync(markerDir, { recursive: true });
+    writeFileSync(path.join(markerDir, "project.yaml"), `id: ${name}\n`, "utf8");
+  }
+
+  it("includes a project dir that carries its .nightforge/project.yaml", () => {
+    markProject("myapp");
+    expect(registeredProjectIds(dir)).toEqual(["myapp"]);
+  });
+
+  it("excludes a stray dir without the yaml marker", () => {
+    markProject("myapp");
+    mkdirSync(path.join(dir, "stray"), { recursive: true });
+    expect(registeredProjectIds(dir)).toEqual(["myapp"]);
+  });
+
+  it("excludes the reserved releases dir even when it holds a yaml", () => {
+    markProject("myapp");
+    markProject("releases");
+    expect(registeredProjectIds(dir)).toEqual(["myapp"]);
+  });
+
+  it("excludes a symlink to a project dir", () => {
+    markProject("myapp");
+    symlinkSync(path.join(dir, "myapp"), path.join(dir, "alias"));
+    expect(registeredProjectIds(dir)).toEqual(["myapp"]);
+  });
+
+  it("returns [] for a missing or empty root and never throws", () => {
+    expect(registeredProjectIds(path.join(dir, "does-not-exist"))).toEqual([]);
+    expect(registeredProjectIds(dir)).toEqual([]);
   });
 });
 
