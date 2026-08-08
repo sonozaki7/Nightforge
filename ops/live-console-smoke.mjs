@@ -154,7 +154,9 @@ async function runChecks() {
       `query Issue($id: String!) { issue(id: $id) { comments { nodes { createdAt } } } }`,
       { id: homeId }
     );
-    return data.issue?.comments?.nodes?.at(-1)?.createdAt ?? null;
+    // Comments can come back newest-first; take the latest createdAt of all.
+    const stamps = (data.issue?.comments?.nodes ?? []).map((c) => String(c.createdAt));
+    return stamps.length > 0 ? stamps.sort().at(-1) : null;
   };
 
   // CHK1: project list on the Home ticket, matched against the on-disk registry.
