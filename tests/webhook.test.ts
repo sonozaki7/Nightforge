@@ -31,6 +31,7 @@ function linearClientMock(): LinearClient {
     createWebhook: vi.fn(),
     createIssue: vi.fn().mockResolvedValue(undefined),
     listTeamIssues: vi.fn().mockResolvedValue([]),
+    listTeamStates: vi.fn(),
   };
 }
 

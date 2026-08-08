@@ -42,10 +42,14 @@ export interface LinearClient {
     teamId: string;
     title: string;
     description: string;
+    stateId?: string;
   }): Promise<void>;
   listTeamIssues(
     teamId: string
   ): Promise<Array<{ id: string; title: string }>>;
+  listTeamStates(
+    teamId: string
+  ): Promise<Array<{ id: string; name: string; type: string }>>;
 }
 
 export function createLinearClient(apiKey: string): LinearClient {
@@ -368,11 +372,12 @@ export function createLinearClient(apiKey: string): LinearClient {
       teamId: string;
       title: string;
       description: string;
+      stateId?: string;
     }): Promise<void> {
       const mutation = `
-        mutation IssueCreate($teamId: String!, $title: String!, $description: String) {
+        mutation IssueCreate($teamId: String!, $title: String!, $description: String, $stateId: String) {
           issueCreate(
-            input: { teamId: $teamId, title: $title, description: $description }
+            input: { teamId: $teamId, title: $title, description: $description, stateId: $stateId }
           ) {
             success
             issue {
@@ -388,6 +393,7 @@ export function createLinearClient(apiKey: string): LinearClient {
         teamId: input.teamId,
         title: input.title,
         description: input.description,
+        ...(input.stateId ? { stateId: input.stateId } : {}),
       });
 
       if (!data.issueCreate.success) {
@@ -418,6 +424,32 @@ export function createLinearClient(apiKey: string): LinearClient {
       }>(query, { teamId });
 
       return data.team?.issues.nodes ?? [];
+    },
+
+    async listTeamStates(
+      teamId: string
+    ): Promise<Array<{ id: string; name: string; type: string }>> {
+      const query = `
+        query TeamStates($teamId: String!) {
+          team(id: $teamId) {
+            states(first: 50) {
+              nodes {
+                id
+                name
+                type
+              }
+            }
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        team: {
+          states: { nodes: Array<{ id: string; name: string; type: string }> };
+        } | null;
+      }>(query, { teamId });
+
+      return data.team?.states.nodes ?? [];
     },
   };
 }

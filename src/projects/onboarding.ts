@@ -223,6 +223,24 @@ export async function seedControlOnboarding(
       existing.map((issue) => issue.title.toLowerCase())
     );
 
+    const states = await linearClient.listTeamStates(match.id);
+    const unstarted = states.filter((state) => state.type === "unstarted");
+    const firstUnstarted = unstarted.length > 0 ? unstarted[0] : undefined;
+    const todoState =
+      unstarted.find((state) => /todo/i.test(state.name)) ?? firstUnstarted;
+    const stateId = todoState?.id;
+    if (stateId !== undefined) {
+      logger.info(
+        { teamId: match.id, stateName: todoState?.name },
+        "Control onboarding will seed into a visible Todo state"
+      );
+    } else {
+      logger.warn(
+        { teamId: match.id },
+        "No unstarted Todo state found; seeding into the team default state"
+      );
+    }
+
     let created = 0;
     let skipped = 0;
     for (const tutorial of CONTROL_TUTORIAL_ISSUES) {
@@ -234,6 +252,7 @@ export async function seedControlOnboarding(
         teamId: match.id,
         title: tutorial.title,
         description: tutorial.description,
+        ...(stateId !== undefined ? { stateId } : {}),
       });
       created += 1;
     }

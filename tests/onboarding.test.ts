@@ -21,6 +21,9 @@ function mockLinearClient(overrides: Partial<LinearClient> = {}): LinearClient {
     createWebhook: vi.fn(),
     createIssue: vi.fn().mockResolvedValue(undefined),
     listTeamIssues: vi.fn().mockResolvedValue([]),
+    listTeamStates: vi.fn().mockResolvedValue([
+      { id: "state-todo", name: "Todo", type: "unstarted" },
+    ]),
     ...overrides,
   };
 }
@@ -38,8 +41,10 @@ describe("seedControlOnboarding", () => {
         teamId: "team-1",
         title: tutorial.title,
         description: tutorial.description,
+        stateId: "state-todo",
       });
     }
+    expect(linear.listTeamStates).toHaveBeenCalledWith("team-1");
   });
 
   it("skips issues whose titles already exist", async () => {
@@ -77,6 +82,45 @@ describe("seedControlOnboarding", () => {
     const seeded = await seedControlOnboarding(linear, "ghost-team");
     expect(seeded).toBe(0);
     expect(linear.createIssue).not.toHaveBeenCalled();
+  });
+
+  it("seeds into the Todo state when it exists", async () => {
+    const linear = mockLinearClient({
+      listTeamStates: vi.fn().mockResolvedValue([
+        { id: "state-backlog", name: "Backlog", type: "backlog" },
+        { id: "state-todo", name: "Todo", type: "unstarted" },
+        { id: "state-inprogress", name: "In Progress", type: "started" },
+      ]),
+    });
+    const seeded = await seedControlOnboarding(linear, "team-1");
+    expect(seeded).toBe(CONTROL_TUTORIAL_ISSUES.length);
+    expect(linear.createIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ stateId: "state-todo" })
+    );
+  });
+
+  it("seeds without a stateId when no unstarted state exists", async () => {
+    const linear = mockLinearClient({
+      listTeamStates: vi.fn().mockResolvedValue([
+        { id: "state-backlog", name: "Backlog", type: "backlog" },
+        { id: "state-done", name: "Done", type: "completed" },
+      ]),
+    });
+    const seeded = await seedControlOnboarding(linear, "team-1");
+    expect(seeded).toBe(CONTROL_TUTORIAL_ISSUES.length);
+    expect(linear.createIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: "team-1" })
+    );
+    for (const call of vi.mocked(linear.createIssue).mock.calls) {
+      expect(call[0]).not.toHaveProperty("stateId");
+    }
+  });
+
+  it("returns 0 and does not throw when listTeamStates fails", async () => {
+    const linear = mockLinearClient({
+      listTeamStates: vi.fn().mockRejectedValue(new Error("Linear down")),
+    });
+    await expect(seedControlOnboarding(linear, "team-1")).resolves.toBe(0);
   });
 
   it("returns 0 and does not throw when createIssue fails", async () => {
