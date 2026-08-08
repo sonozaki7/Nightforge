@@ -8,6 +8,7 @@ import type { LinearClient, LinearTeam } from "../integrations/linear.js";
 import { addProject, parseRepoUrl, slugify } from "../cli/project-add.js";
 import { loadProjectConfig } from "./project-loader.js";
 import { parseProjectConfig } from "./registry.js";
+import { registeredProjectIds } from "./project-registry.js";
 
 const logger = pino({ name: "nightforge-project-control" });
 
@@ -259,22 +260,6 @@ export async function resolveRepoRef(
 }
 
 export function createProjectControl(deps: ControlDeps): ProjectControl {
-  // `releases` is Nightforge's own storage for shipped releases, not a project.
-  const RESERVED_DIRS = new Set(["releases"]);
-
-  const listProjectIds = (): string[] => {
-    try {
-      return readdirSync(deps.projectsDir, { withFileTypes: true })
-        .filter(
-          (entry) =>
-            entry.isDirectory() && !RESERVED_DIRS.has(entry.name)
-        )
-        .map((entry) => entry.name);
-    } catch {
-      return [];
-    }
-  };
-
   const projectRepoPath = (projectId: string): string =>
     path.join(deps.projectsDir, projectId);
 
@@ -362,7 +347,7 @@ export function createProjectControl(deps: ControlDeps): ProjectControl {
   };
 
   const cmdList = (): string => {
-    const ids = listProjectIds();
+    const ids = registeredProjectIds(deps.projectsDir);
     if (ids.length === 0) {
       return "No projects registered yet. Add one by pasting a repo URL or typing a repo name.";
     }
@@ -458,7 +443,7 @@ It lives at \`.nightforge/references/${command.sourceProject}/${command.filePath
       full_name?: string;
       html_url?: string;
     }>;
-    const registered = new Set(listProjectIds());
+    const registered = new Set(registeredProjectIds(deps.projectsDir));
     const entries = repos
       .map((repo) => {
         const name = (repo.full_name ?? "").split("/").pop() ?? "";
