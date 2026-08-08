@@ -9,6 +9,29 @@ export const CONTROL_TUTORIAL_ISSUES: Array<{
   description: string;
 }> = [
   {
+    title: "🏠 Nightforge Home — run commands here",
+    description: `## You don't need to create new tickets anymore
+
+This ticket is your Nightforge "chat console". To tell Nightforge what to do, just type a command in the comments below and press enter. Nightforge replies right here in the thread.
+
+## Try it right now
+
+Type \`help\` in the comments below and Nightforge will reply with everything it can do.
+
+## Examples you can type as comments
+
+- \`project list\` — show your projects
+- \`project discover\` — show all your GitHub repos
+- \`browser-use\` — add a repo by its name
+- \`https://github.com/sonozaki7/browser-use\` — add a repo by pasting its URL
+- \`project status my-app\` — check a project's status
+- \`project remove my-app\` — remove a project (your GitHub repo stays safe)
+
+## The old way still works
+
+You can still create a new ticket with a command title and move it to Ready for AI — that always works too. But the comment way is faster.`,
+  },
+  {
     title: "👋 Welcome to Nightforge — start here",
     description: `## What is Nightforge?
 
@@ -268,5 +291,78 @@ export async function seedControlOnboarding(
       "Control onboarding seeding failed"
     );
     return 0;
+  }
+}
+
+/**
+ * Best-effort wiring of the control team's webhook so it also delivers
+ * Comment events (the "chat console"). Creates the webhook when missing,
+ * upgrades its resourceTypes when it lacks Comment, and never throws.
+ */
+export async function ensureControlCommentWebhook(
+  linearClient: LinearClient,
+  controlTeam: string,
+  publicBaseUrl: string,
+  webhookSecret: string
+): Promise<void> {
+  try {
+    const teams = await linearClient.listTeams();
+    const match = teams.find(
+      (team) =>
+        team.id === controlTeam ||
+        team.name.toLowerCase() === controlTeam.toLowerCase()
+    );
+    if (match === undefined) {
+      logger.warn(
+        { controlTeam },
+        "Control team not found for comment webhook setup"
+      );
+      return;
+    }
+
+    const webhooks = await linearClient.listWebhooks(match.id);
+    const found = webhooks.find((webhook) => {
+      const label = webhook.label.toLowerCase();
+      return (
+        label.includes("nightforge-control") ||
+        label.includes(controlTeam.toLowerCase())
+      );
+    });
+
+    if (found !== undefined) {
+      if (!found.resourceTypes.includes("Comment")) {
+        await linearClient.updateWebhook({
+          webhookId: found.id,
+          resourceTypes: ["Issue", "Comment"],
+        });
+        logger.info(
+          { teamId: match.id, webhookId: found.id },
+          "Control webhook updated to include Comment events"
+        );
+      } else {
+        logger.info(
+          { teamId: match.id, webhookId: found.id },
+          "Control webhook already includes Comment events"
+        );
+      }
+      return;
+    }
+
+    const webhookUrl = `${publicBaseUrl.replace(/\/$/, "")}/webhooks/linear`;
+    await linearClient.createWebhook({
+      teamId: match.id,
+      url: webhookUrl,
+      label: "nightforge-control",
+      secret: webhookSecret,
+    });
+    logger.info(
+      { teamId: match.id },
+      "Control webhook created with Comment events"
+    );
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message },
+      "Control comment webhook setup failed"
+    );
   }
 }

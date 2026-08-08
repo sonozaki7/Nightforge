@@ -172,9 +172,11 @@ export function parseControlCommand(text: string): ControlCommand {
   return { kind: "help" };
 }
 
-export const HELP_TEXT = `New here? Open the "👋 Welcome to Nightforge — start here" ticket in this team.
+export const HELP_TEXT = `New here? You can run any command as a COMMENT on the "🏠 Nightforge Home" ticket — no need to create a new ticket.
 
-Commands (create a ticket here, move it to "Ready for AI"):
+New here? Open the "👋 Welcome to Nightforge — start here" ticket in this team.
+
+Commands (create a ticket here, move it to "Ready for AI") — or run any of them as a comment on the Home ticket:
 
 Add a project — any of these work:
 - paste the repo URL (e.g. https://github.com/sonozaki7/browser-use)

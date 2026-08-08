@@ -23,6 +23,8 @@ describe("Linear webhook integration", () => {
     listTeams: vi.fn(),
     createTeam: vi.fn(),
     createWebhook: vi.fn(),
+    listWebhooks: vi.fn(),
+    updateWebhook: vi.fn(),
     createIssue: vi.fn(),
     listTeamIssues: vi.fn(),
     listTeamStates: vi.fn(),
@@ -344,13 +346,25 @@ describe("Linear comment approval", () => {
 
   const mockLinearClient: LinearClient = {
     verifyWebhookSignature: vi.fn().mockReturnValue(true),
-    getIssue: vi.fn(),
+    getIssue: vi.fn().mockResolvedValue({
+      id: "issue-123",
+      identifier: "TEST-1",
+      title: "Test",
+      description: "",
+      priority: 0,
+      labels: [],
+      stateName: "Todo",
+      teamId: "team-other",
+      teamName: "Other Team",
+    }),
     getChildIssues: vi.fn(),
     postComment: vi.fn().mockResolvedValue(undefined),
     updateIssueState: vi.fn(),
     createIssue: vi.fn(),
     listTeamIssues: vi.fn(),
     listTeamStates: vi.fn(),
+    listWebhooks: vi.fn(),
+    updateWebhook: vi.fn(),
   };
 
   const mockScheduler: Scheduler = {

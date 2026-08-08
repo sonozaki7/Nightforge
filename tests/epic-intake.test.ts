@@ -11,6 +11,8 @@ function issue(overrides: Partial<LinearIssue> & { identifier: string }): Linear
     priority: 2,
     labels: [],
     stateName: "Todo",
+    teamId: "team-1",
+    teamName: "Nightforge",
     ...overrides,
   };
 }

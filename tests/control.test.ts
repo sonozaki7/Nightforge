@@ -18,6 +18,8 @@ function mockLinearClient(): LinearClient {
     listTeams: vi.fn().mockResolvedValue([{ id: "team-existing", name: "existing" }]),
     createTeam: vi.fn().mockResolvedValue({ id: "team-new", name: "my-app" }),
     createWebhook: vi.fn().mockResolvedValue(undefined),
+    listWebhooks: vi.fn(),
+    updateWebhook: vi.fn(),
     createIssue: vi.fn().mockResolvedValue(undefined),
     listTeamIssues: vi.fn().mockResolvedValue([]),
     listTeamStates: vi.fn(),

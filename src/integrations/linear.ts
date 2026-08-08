@@ -13,6 +13,8 @@ export interface LinearIssue {
   priority: number;
   labels: string[];
   stateName: string;
+  teamId: string | null;
+  teamName: string | null;
 }
 
 export interface LinearTeam {
@@ -37,6 +39,13 @@ export interface LinearClient {
     url: string;
     label: string;
     secret: string;
+  }): Promise<void>;
+  listWebhooks(
+    teamId: string
+  ): Promise<Array<{ id: string; label: string; resourceTypes: string[] }>>;
+  updateWebhook(input: {
+    webhookId: string;
+    resourceTypes: string[];
   }): Promise<void>;
   createIssue(input: {
     teamId: string;
@@ -118,6 +127,10 @@ export function createLinearClient(apiKey: string): LinearClient {
             state {
               name
             }
+            team {
+              id
+              name
+            }
             labels {
               nodes {
                 name
@@ -136,6 +149,7 @@ export function createLinearClient(apiKey: string): LinearClient {
             description: string | null;
             priority: number;
             state: { name: string };
+            team: { id: string; name: string } | null;
             labels: { nodes: Array<{ name: string }> };
           };
         }>(query, { id: issueId });
@@ -147,6 +161,8 @@ export function createLinearClient(apiKey: string): LinearClient {
           description: data.issue.description,
           priority: data.issue.priority,
           stateName: data.issue.state.name,
+          teamId: data.issue.team?.id ?? null,
+          teamName: data.issue.team?.name ?? null,
           labels: data.issue.labels.nodes.map((l) => l.name),
         };
       } catch (err) {
@@ -167,6 +183,10 @@ export function createLinearClient(apiKey: string): LinearClient {
                 description
                 priority
                 state {
+                  name
+                }
+                team {
+                  id
                   name
                 }
                 labels {
@@ -191,6 +211,7 @@ export function createLinearClient(apiKey: string): LinearClient {
                 description: string | null;
                 priority: number;
                 state: { name: string };
+                team: { id: string; name: string } | null;
                 labels: { nodes: Array<{ name: string }> };
               }>;
             };
@@ -204,6 +225,8 @@ export function createLinearClient(apiKey: string): LinearClient {
           description: child.description,
           priority: child.priority,
           stateName: child.state.name,
+          teamId: child.team?.id ?? null,
+          teamName: child.team?.name ?? null,
           labels: child.labels.nodes.map((l) => l.name),
         }));
       } catch (err) {
@@ -344,7 +367,7 @@ export function createLinearClient(apiKey: string): LinearClient {
               url: $url
               label: $label
               secret: $secret
-              resourceTypes: [Issue]
+              resourceTypes: [Issue, Comment]
             }
           ) {
             success
@@ -366,6 +389,107 @@ export function createLinearClient(apiKey: string): LinearClient {
       }
 
       logger.info({ teamId: input.teamId }, "Webhook created for team");
+    },
+
+    async listWebhooks(
+      teamId: string
+    ): Promise<Array<{ id: string; label: string; resourceTypes: string[] }>> {
+      const query = `
+        query TeamWebhooks($teamId: String!) {
+          team(id: $teamId) {
+            webhooks(first: 50) {
+              nodes {
+                id
+                label
+                resourceTypes
+              }
+            }
+          }
+        }
+      `;
+
+      const fallbackQuery = `
+        query AllWebhooks {
+          webhooks(first: 50) {
+            nodes {
+              id
+              label
+              resourceTypes
+              team {
+                id
+              }
+            }
+          }
+        }
+      `;
+
+      // Some Linear workspaces don't expose team.webhooks; fall back to the
+      // global webhook list and filter by team id.
+      try {
+        const data = await graphqlRequest<{
+          team: {
+            webhooks: {
+              nodes: Array<{
+                id: string;
+                label: string;
+                resourceTypes: string[];
+              }>;
+            };
+          } | null;
+        }>(query, { teamId });
+        return data.team?.webhooks.nodes ?? [];
+      } catch (err) {
+        logger.warn(
+          { err, teamId },
+          "Team webhooks query failed; falling back to global list"
+        );
+        const data = await graphqlRequest<{
+          webhooks: {
+            nodes: Array<{
+              id: string;
+              label: string;
+              resourceTypes: string[];
+              team: { id: string };
+            }>;
+          };
+        }>(fallbackQuery, {});
+        return data.webhooks.nodes
+          .filter((node) => node.team.id === teamId)
+          .map(({ id, label, resourceTypes }) => ({
+            id,
+            label,
+            resourceTypes,
+          }));
+      }
+    },
+
+    async updateWebhook(input: {
+      webhookId: string;
+      resourceTypes: string[];
+    }): Promise<void> {
+      const mutation = `
+        mutation WebhookUpdate($id: String!, $resourceTypes: [WebhookResourceType!]!) {
+          webhookUpdate(id: $id, input: { resourceTypes: $resourceTypes }) {
+            success
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        webhookUpdate: { success: boolean };
+      }>(mutation, {
+        id: input.webhookId,
+        resourceTypes: input.resourceTypes,
+      });
+
+      if (!data.webhookUpdate.success) {
+        throw new Error(`Linear webhookUpdate failed for "${input.webhookId}"`);
+      }
+
+      logger.info(
+        { webhookId: input.webhookId },
+        "Webhook updated to include Comment events"
+      );
     },
 
     async createIssue(input: {

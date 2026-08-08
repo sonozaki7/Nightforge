@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   seedControlOnboarding,
+  ensureControlCommentWebhook,
   CONTROL_TUTORIAL_ISSUES,
 } from "../src/projects/onboarding.js";
 import type { LinearClient } from "../src/integrations/linear.js";
@@ -19,6 +20,8 @@ function mockLinearClient(overrides: Partial<LinearClient> = {}): LinearClient {
     ]),
     createTeam: vi.fn(),
     createWebhook: vi.fn(),
+    listWebhooks: vi.fn().mockResolvedValue([]),
+    updateWebhook: vi.fn(),
     createIssue: vi.fn().mockResolvedValue(undefined),
     listTeamIssues: vi.fn().mockResolvedValue([]),
     listTeamStates: vi.fn().mockResolvedValue([
@@ -29,7 +32,7 @@ function mockLinearClient(overrides: Partial<LinearClient> = {}): LinearClient {
 }
 
 describe("seedControlOnboarding", () => {
-  it("seeds all 7 tutorial issues when the team has none", async () => {
+  it("seeds all tutorial issues when the team has none", async () => {
     const linear = mockLinearClient();
     const seeded = await seedControlOnboarding(linear, "team-1");
     expect(seeded).toBe(CONTROL_TUTORIAL_ISSUES.length);
@@ -135,5 +138,105 @@ describe("seedControlOnboarding", () => {
       listTeamIssues: vi.fn().mockRejectedValue(new Error("Linear down")),
     });
     await expect(seedControlOnboarding(linear, "team-1")).resolves.toBe(0);
+  });
+});
+
+describe("ensureControlCommentWebhook", () => {
+  it("updates the webhook to include Comment when it lacks them", async () => {
+    const linear = mockLinearClient({
+      listWebhooks: vi.fn().mockResolvedValue([
+        { id: "wh-1", label: "nightforge-control", resourceTypes: ["Issue"] },
+      ]),
+    });
+    await ensureControlCommentWebhook(
+      linear,
+      "team-1",
+      "https://getnightforge.com",
+      "secret"
+    );
+    expect(linear.updateWebhook).toHaveBeenCalledWith({
+      webhookId: "wh-1",
+      resourceTypes: ["Issue", "Comment"],
+    });
+    expect(linear.createWebhook).not.toHaveBeenCalled();
+  });
+
+  it("creates a webhook when none exists", async () => {
+    const linear = mockLinearClient({
+      listWebhooks: vi.fn().mockResolvedValue([]),
+    });
+    await ensureControlCommentWebhook(
+      linear,
+      "team-1",
+      "https://getnightforge.com/",
+      "secret"
+    );
+    expect(linear.createWebhook).toHaveBeenCalledWith({
+      teamId: "team-1",
+      url: "https://getnightforge.com/webhooks/linear",
+      label: "nightforge-control",
+      secret: "secret",
+    });
+  });
+
+  it("does nothing when the webhook already includes Comment", async () => {
+    const linear = mockLinearClient({
+      listWebhooks: vi.fn().mockResolvedValue([
+        {
+          id: "wh-1",
+          label: "nightforge-control",
+          resourceTypes: ["Issue", "Comment"],
+        },
+      ]),
+    });
+    await ensureControlCommentWebhook(
+      linear,
+      "team-1",
+      "https://getnightforge.com",
+      "secret"
+    );
+    expect(linear.updateWebhook).not.toHaveBeenCalled();
+    expect(linear.createWebhook).not.toHaveBeenCalled();
+  });
+
+  it("never throws when the Linear API fails", async () => {
+    const linear = mockLinearClient({
+      listWebhooks: vi.fn().mockRejectedValue(new Error("Linear down")),
+    });
+    await expect(
+      ensureControlCommentWebhook(
+        linear,
+        "team-1",
+        "https://getnightforge.com",
+        "secret"
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("resolves the team by name", async () => {
+    const linear = mockLinearClient({
+      listWebhooks: vi.fn().mockResolvedValue([]),
+    });
+    await ensureControlCommentWebhook(
+      linear,
+      "Nightforge Control",
+      "https://getnightforge.com",
+      "secret"
+    );
+    expect(linear.createWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: "team-1" })
+    );
+  });
+
+  it("does nothing when the team cannot be found", async () => {
+    const linear = mockLinearClient();
+    await ensureControlCommentWebhook(
+      linear,
+      "ghost-team",
+      "https://getnightforge.com",
+      "secret"
+    );
+    expect(linear.createWebhook).not.toHaveBeenCalled();
+    expect(linear.updateWebhook).not.toHaveBeenCalled();
   });
 });

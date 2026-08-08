@@ -112,6 +112,20 @@ export function createServer(deps: ServerDeps): FastifyInstance {
     return false;
   };
 
+  // A redelivered comment webhook must not run the same command twice.
+  const recentCommentTriggers = new Map<string, number>();
+  const isDuplicateComment = (commentId: string): boolean => {
+    const now = Date.now();
+    if (recentCommentTriggers.has(commentId)) {
+      const last = recentCommentTriggers.get(commentId) ?? 0;
+      if (now - last < 15_000) {
+        return true;
+      }
+    }
+    recentCommentTriggers.set(commentId, now);
+    return false;
+  };
+
   // Linear signs the raw request body; restringifying parsed JSON can
   // break the HMAC (docs: "strongly recommended to use raw request body").
   server.addHook("preParsing", async (request, _reply, payload) => {
@@ -189,6 +203,102 @@ export function createServer(deps: ServerDeps): FastifyInstance {
     await reply.status(200).send({ message: "Approval queued" });
   };
 
+  /**
+   * Comment-based command console: a comment on a ticket in the Nightforge
+   * Control team is parsed as a project command and the reply is posted back
+   * into the same thread. Comments on any other team fall through to the
+   * approval handler. Never crashes on errors — always answers 200.
+   */
+  const handleCommentCommand = async (
+    body: unknown,
+    reply: FastifyReply
+  ): Promise<void> => {
+    try {
+      const parsed = commentPayloadSchema.safeParse(body);
+      if (!parsed.success) {
+        logger.warn({ errors: parsed.error.issues }, "Invalid comment payload");
+        await reply.status(400).send({ error: "Invalid payload" });
+        return;
+      }
+
+      const payload = parsed.data;
+      if (payload.action !== "create") {
+        await reply.status(200).send({ message: "Ignored" });
+        return;
+      }
+
+      const commentBody = payload.data.body ?? "";
+
+      // Loop guard: Nightforge's own reply comments (⚙️ for commands, ✅ for
+      // approvals) must never be re-processed as commands.
+      const trimmed = commentBody.trim();
+      if (trimmed.startsWith("⚙️") || trimmed.startsWith("✅")) {
+        await reply.status(200).send({ message: "bot comment ignored" });
+        return;
+      }
+
+      if (trimmed === "") {
+        await reply.status(200).send({ message: "Ignored" });
+        return;
+      }
+
+      const issue = await deps.linearClient.getIssue(payload.data.issueId);
+      if (issue === null) {
+        await reply.status(200).send({ message: "Ignored" });
+        return;
+      }
+
+      const controlTeam = deps.controlTeam;
+      const isControl =
+        controlTeam !== undefined &&
+        controlTeam !== "" &&
+        (issue.teamId === controlTeam ||
+          issue.teamName?.toLowerCase() === controlTeam.toLowerCase());
+
+      if (!isControl) {
+        await handleCommentApproval(body, reply);
+        return;
+      }
+
+      // A redelivered comment must not double-run the command.
+      if (isDuplicateComment(payload.data.id)) {
+        await reply.status(200).send({ message: "Duplicate comment ignored" });
+        return;
+      }
+
+      if (deps.projectControl === undefined) {
+        await reply.status(200).send({ message: "Ignored" });
+        return;
+      }
+
+      const command = parseControlCommand(trimmed);
+
+      // Noise guard: a random chat comment parses to "help" but must not
+      // trigger a help reply unless the user explicitly asked for it.
+      if (
+        command.kind === "help" &&
+        !/^(help|commands|what can you do|project help)\b/i.test(trimmed)
+      ) {
+        await reply.status(200).send({ message: "Ignored" });
+        return;
+      }
+
+      const commandReply = await deps.projectControl.run(command);
+      await deps.linearClient.postComment(
+        payload.data.issueId,
+        `⚙️ ${commandReply}`
+      );
+      logger.info(
+        { issueId: payload.data.issueId, command: command.kind },
+        "Control command processed from comment"
+      );
+      await reply.status(200).send({ message: "Command processed" });
+    } catch (err) {
+      logger.error({ err }, "Comment command handler failed");
+      await reply.status(200).send({ message: "Ignored" });
+    }
+  };
+
   server.post(
     "/webhooks/linear",
     async (
@@ -223,7 +333,7 @@ export function createServer(deps: ServerDeps): FastifyInstance {
       const type = typeof body.type === "string" ? body.type : "";
 
       if (type === "Comment") {
-        await handleCommentApproval(body, reply);
+        await handleCommentCommand(body, reply);
         return;
       }
 
@@ -310,6 +420,8 @@ export function createServer(deps: ServerDeps): FastifyInstance {
         priority: payload.data.priority,
         labels,
         stateName: payload.data.state.name,
+        teamId: team?.id ?? null,
+        teamName: team?.name ?? null,
       };
 
       if (deps.epicDispatch !== undefined && deps.epicDispatch.isEpic(issue)) {
