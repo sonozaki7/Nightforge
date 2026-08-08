@@ -23,6 +23,8 @@ describe("Linear webhook integration", () => {
     listTeams: vi.fn(),
     createTeam: vi.fn(),
     createWebhook: vi.fn(),
+    createIssue: vi.fn(),
+    listTeamIssues: vi.fn(),
   };
 
   const mockScheduler: Scheduler = {
@@ -345,6 +347,8 @@ describe("Linear comment approval", () => {
     getChildIssues: vi.fn(),
     postComment: vi.fn().mockResolvedValue(undefined),
     updateIssueState: vi.fn(),
+    createIssue: vi.fn(),
+    listTeamIssues: vi.fn(),
   };
 
   const mockScheduler: Scheduler = {

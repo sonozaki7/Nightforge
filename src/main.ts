@@ -18,6 +18,7 @@ import { createCiGate } from "./projects/ci-gate.js";
 import { loadProjectConfig, repoPathFor } from "./projects/project-loader.js";
 import { createTeamRouter } from "./projects/team-router.js";
 import { createProjectControl } from "./projects/control.js";
+import { seedControlOnboarding } from "./projects/onboarding.js";
 import { createHealthChecker } from "./integrations/health.js";
 import { createTelemetry } from "./memory/telemetry.js";
 import { createSpeedMetrics } from "./memory/speed-metrics.js";
@@ -407,6 +408,23 @@ async function main(): Promise<void> {
       projectId: config.projectId,
     }),
   });
+
+  if (config.control.team !== "") {
+    try {
+      const seeded = await seedControlOnboarding(
+        linearClient,
+        config.control.team
+      );
+      if (seeded > 0) {
+        logger.info({ seeded }, "Seeded Nightforge Control tutorial issues");
+      }
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message },
+        "Control tutorial seeding skipped"
+      );
+    }
+  }
 
   await server.listen({ port: config.server.port, host: config.server.host });
   logger.info(

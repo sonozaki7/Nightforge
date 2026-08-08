@@ -18,12 +18,23 @@ function mockLinearClient(): LinearClient {
     listTeams: vi.fn().mockResolvedValue([{ id: "team-existing", name: "existing" }]),
     createTeam: vi.fn().mockResolvedValue({ id: "team-new", name: "my-app" }),
     createWebhook: vi.fn().mockResolvedValue(undefined),
+    createIssue: vi.fn().mockResolvedValue(undefined),
+    listTeamIssues: vi.fn().mockResolvedValue([]),
   };
 }
 
 describe("parseControlCommand", () => {
   it("parses add commands with a repo URL", () => {
     const cmd = parseControlCommand("project add https://github.com/sonozaki7/my-app");
+    expect(cmd.kind).toBe("add");
+    if (cmd.kind === "add") {
+      expect(cmd.repoUrl).toBe("https://github.com/sonozaki7/my-app");
+      expect(cmd.teamName).toBe("my-app");
+    }
+  });
+
+  it("parses add without the project prefix using a repo URL", () => {
+    const cmd = parseControlCommand("add https://github.com/sonozaki7/my-app");
     expect(cmd.kind).toBe("add");
     if (cmd.kind === "add") {
       expect(cmd.repoUrl).toBe("https://github.com/sonozaki7/my-app");

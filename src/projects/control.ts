@@ -172,13 +172,15 @@ export function parseControlCommand(text: string): ControlCommand {
   return { kind: "help" };
 }
 
-export const HELP_TEXT = `Commands (create a ticket here, move it to "Ready for AI"):
+export const HELP_TEXT = `New here? Open the "👋 Welcome to Nightforge — start here" ticket in this team.
+
+Commands (create a ticket here, move it to "Ready for AI"):
 
 Add a project — any of these work:
 - paste the repo URL (e.g. https://github.com/sonozaki7/browser-use)
 - just the repo name (e.g. browser-use)
 - owner/name (e.g. sonozaki7/browser-use)
-- or: project add <repo-url>
+- the explicit way (always works): project add <repo-url>
 
 project remove <project-id>
 project list

@@ -38,6 +38,14 @@ export interface LinearClient {
     label: string;
     secret: string;
   }): Promise<void>;
+  createIssue(input: {
+    teamId: string;
+    title: string;
+    description: string;
+  }): Promise<void>;
+  listTeamIssues(
+    teamId: string
+  ): Promise<Array<{ id: string; title: string }>>;
 }
 
 export function createLinearClient(apiKey: string): LinearClient {
@@ -354,6 +362,62 @@ export function createLinearClient(apiKey: string): LinearClient {
       }
 
       logger.info({ teamId: input.teamId }, "Webhook created for team");
+    },
+
+    async createIssue(input: {
+      teamId: string;
+      title: string;
+      description: string;
+    }): Promise<void> {
+      const mutation = `
+        mutation IssueCreate($teamId: String!, $title: String!, $description: String) {
+          issueCreate(
+            input: { teamId: $teamId, title: $title, description: $description }
+          ) {
+            success
+            issue {
+              id
+            }
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        issueCreate: { success: boolean; issue: { id: string } | null };
+      }>(mutation, {
+        teamId: input.teamId,
+        title: input.title,
+        description: input.description,
+      });
+
+      if (!data.issueCreate.success) {
+        throw new Error(`Linear issueCreate failed for "${input.title}"`);
+      }
+
+      logger.info({ teamId: input.teamId }, "Issue created in Linear");
+    },
+
+    async listTeamIssues(
+      teamId: string
+    ): Promise<Array<{ id: string; title: string }>> {
+      const query = `
+        query TeamIssues($teamId: String!) {
+          team(id: $teamId) {
+            issues(first: 100) {
+              nodes {
+                id
+                title
+              }
+            }
+          }
+        }
+      `;
+
+      const data = await graphqlRequest<{
+        team: { issues: { nodes: Array<{ id: string; title: string }> } } | null;
+      }>(query, { teamId });
+
+      return data.team?.issues.nodes ?? [];
     },
   };
 }
