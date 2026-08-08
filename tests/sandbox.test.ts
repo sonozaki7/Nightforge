@@ -35,9 +35,23 @@ describe("sandbox", () => {
     });
 
     it("selects seatbelt when only sandbox-exec exists on darwin", () => {
-      existsSyncMock.mockImplementation((p: string) => p === "/usr/bin/sandbox-exec");
-      const resolved = resolveSandboxMode(BASE_CONFIG);
-      expect(resolved.mode).toBe("seatbelt");
+      // Seatbelt only exists on macOS; simulate it so the test passes on
+      // Linux too (the server and GitHub CI run on Linux).
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, "platform", {
+        value: "darwin",
+        configurable: true,
+      });
+      try {
+        existsSyncMock.mockImplementation((p: string) => p === "/usr/bin/sandbox-exec");
+        const resolved = resolveSandboxMode(BASE_CONFIG);
+        expect(resolved.mode).toBe("seatbelt");
+      } finally {
+        Object.defineProperty(process, "platform", {
+          value: originalPlatform,
+          configurable: true,
+        });
+      }
     });
   });
 
