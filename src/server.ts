@@ -97,6 +97,21 @@ export interface ServerDeps {
 export function createServer(deps: ServerDeps): FastifyInstance {
   const server = Fastify({ logger: false });
 
+  // Linear can fire both a "create" and a follow-up "update" webhook for one
+  // user action; a short window prevents the same ticket running twice.
+  const recentTriggers = new Map<string, number>();
+  const isDuplicateTrigger = (ticketId: string): boolean => {
+    const now = Date.now();
+    if (recentTriggers.has(ticketId)) {
+      const last = recentTriggers.get(ticketId) ?? 0;
+      if (now - last < 15_000) {
+        return true;
+      }
+    }
+    recentTriggers.set(ticketId, now);
+    return false;
+  };
+
   // Linear signs the raw request body; restringifying parsed JSON can
   // break the HMAC (docs: "strongly recommended to use raw request body").
   server.addHook("preParsing", async (request, _reply, payload) => {
@@ -229,13 +244,23 @@ export function createServer(deps: ServerDeps): FastifyInstance {
 
       const payload = parseResult.data;
 
-      if (payload.action !== "update") {
+      // A brand-new ticket created directly in the trigger column fires a
+      // "create" event; one moved into it fires "update". Both must trigger,
+      // otherwise creating a ticket in "Ready for AI" silently does nothing.
+      if (payload.action !== "update" && payload.action !== "create") {
         await reply.status(200).send({ message: "Ignored" });
         return;
       }
 
       if (payload.data.state.name !== READY_STATE) {
         await reply.status(200).send({ message: "State not triggered" });
+        return;
+      }
+
+      // A duplicate "create"+"update" pair must never run the same ticket
+      // twice — drop the straggler regardless of which branch handles it.
+      if (isDuplicateTrigger(payload.data.id)) {
+        await reply.status(200).send({ message: "Duplicate trigger ignored" });
         return;
       }
 
